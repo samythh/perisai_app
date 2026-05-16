@@ -76,7 +76,7 @@ object AiServerManager {
         val ocrWords         = verdict.optJSONArray("ocr_detected_words") ?: JSONArray()
 
         // FIX: triggered_by harus berbasis visualLabel="JUDI", bukan sekadar confidence > 0
-        val visualPositive = visualLabel.equals("JUDI", ignoreCase = true)
+        val visualPositive = visualLabel.equals("JUDI", ignoreCase = true) 
         val ocrPositive    = ocrWords.length() > 0
 
         val triggeredBy = when {

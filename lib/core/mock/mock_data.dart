@@ -3,7 +3,7 @@ import '../../models/child.dart';
 
 class MockData {
   // Ganti ke false kalau Supabase sudah siap
-  static const bool useMock = true;
+  static const bool useMock = false;
 
   static final List<Child> children = [
     Child(

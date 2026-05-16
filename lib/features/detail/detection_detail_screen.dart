@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
-import '../../core/mock/mock_data.dart';
 import '../../models/detection.dart';
 
 class DetectionDetailScreen extends StatefulWidget {
@@ -18,6 +18,7 @@ class DetectionDetailScreen extends StatefulWidget {
 class _DetectionDetailScreenState extends State<DetectionDetailScreen> {
   Detection? _detection;
   bool _isLoading = true;
+  String? _signedUrl; // ← signed URL untuk tampilkan gambar
 
   @override
   void initState() {
@@ -28,29 +29,73 @@ class _DetectionDetailScreenState extends State<DetectionDetailScreen> {
   Future<void> _loadDetection() async {
     setState(() => _isLoading = true);
 
-    if (MockData.useMock) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      final found = MockData.detections.where(
-        (d) => d.id == widget.detectionId,
-      ).firstOrNull;
+    try {
+      final response = await Supabase.instance.client
+          .from('detections')
+          .select()
+          .eq('id', widget.detectionId)
+          .maybeSingle();
 
-      setState(() {
-        _detection = found;
-        _isLoading = false;
-      });
-    } else {
-      // TODO: ganti dengan Supabase real saat integrasi
+      if (!mounted) return;
+
+      if (response != null) {
+        _detection = Detection.fromJson(response);
+
+        // Generate signed URL
+        await _generateSignedUrl(_detection!.screenshotUrl);
+      }
+
       setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint('PERISAI: load detection error → $e');
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _generateSignedUrl(String screenshotUrl) async {
+    if (screenshotUrl.isEmpty) return;
+
+    try {
+      // Ambil path dari URL
+      // Format: .../storage/v1/object/public/screenshots/{child_id}/{timestamp}.jpg
+      // atau  : .../storage/v1/object/screenshots/{child_id}/{timestamp}.jpg
+      final uri = Uri.parse(screenshotUrl);
+      final segments = uri.pathSegments;
+
+      debugPrint('PERISAI: URL segments = $segments');
+
+      final bucketIndex = segments.indexOf('screenshots');
+      if (bucketIndex != -1 && bucketIndex < segments.length - 1) {
+        final filePath = segments.sublist(bucketIndex + 1).join('/');
+        debugPrint('PERISAI: filePath = $filePath');
+
+        final signed = await Supabase.instance.client.storage
+            .from('screenshots')
+            .createSignedUrl(filePath, 3600);
+
+        debugPrint('PERISAI: signed URL = $signed');
+        if (mounted) setState(() => _signedUrl = signed);
+      }
+    } catch (e) {
+      debugPrint('PERISAI: signed URL error → $e');
+      // Fallback pakai URL asli
+      if (mounted) setState(() => _signedUrl = screenshotUrl);
     }
   }
 
   Color get _badgeColor {
     switch (_detection?.triggeredBy) {
-      case 'ocr':          return AppColors.ocr;
-      case 'mobilenet':    return AppColors.mobilenet;
-      case 'trustpositif': return AppColors.trustpositif;
-      case 'combined':     return AppColors.combined;
-      default:             return AppColors.textSecondary;
+      case 'ocr':
+        return AppColors.ocr;
+      case 'mobilenet':
+        return AppColors.mobilenet;
+      case 'trustpositif':
+        return AppColors.trustpositif;
+      case 'combined':
+        return AppColors.combined;
+      default:
+        return AppColors.textSecondary;
     }
   }
 
@@ -73,9 +118,9 @@ class _DetectionDetailScreenState extends State<DetectionDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Screenshot
+                      // Screenshot — pakai signedUrl kalau ada
                       _ScreenshotSection(
-                        screenshotUrl: _detection!.screenshotUrl,
+                        screenshotUrl: _signedUrl ?? _detection!.screenshotUrl,
                       ),
                       const SizedBox(height: 20),
 
@@ -130,9 +175,36 @@ class _ScreenshotSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Kalau URL kosong, tampilkan placeholder
+    if (screenshotUrl.isEmpty) {
+      return Container(
+        height: 220,
+        decoration: BoxDecoration(
+          color: AppColors.border,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.image_not_supported_outlined,
+                size: 48,
+                color: AppColors.textSecondary,
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Screenshot tidak tersedia',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: () {
-        // Fullscreen preview
         showDialog(
           context: context,
           builder: (_) => Dialog(
@@ -144,6 +216,14 @@ class _ScreenshotSection extends StatelessWidget {
                   child: CachedNetworkImage(
                     imageUrl: screenshotUrl,
                     fit: BoxFit.contain,
+                    placeholder: (_, __) => const CircularProgressIndicator(
+                      color: Colors.white,
+                    ),
+                    errorWidget: (_, __, ___) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white,
+                      size: 64,
+                    ),
                   ),
                 ),
                 Positioned(
@@ -183,10 +263,20 @@ class _ScreenshotSection extends StatelessWidget {
                 height: 220,
                 color: AppColors.border,
                 child: const Center(
-                  child: Icon(
-                    Icons.image_not_supported_outlined,
-                    size: 48,
-                    color: AppColors.textSecondary,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 48,
+                        color: AppColors.textSecondary,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Gagal load gambar',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -250,15 +340,12 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Waktu deteksi
           _InfoRow(
             icon: Icons.access_time_rounded,
             label: 'Waktu Terdeteksi',
             value: _formatDate(detection.createdAt),
           ),
           const Divider(height: 24),
-
-          // Triggered by
           _InfoRow(
             icon: Icons.radar_rounded,
             label: AppStrings.triggeredBy,
@@ -266,8 +353,6 @@ class _InfoCard extends StatelessWidget {
             valueColor: badgeColor,
           ),
           const Divider(height: 24),
-
-          // Confidence
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -313,8 +398,6 @@ class _InfoCard extends StatelessWidget {
               ),
             ],
           ),
-
-          // Detail per layer kalau ada
           if (detection.details.isNotEmpty) ...[
             const Divider(height: 24),
             const Text(
@@ -328,17 +411,19 @@ class _InfoCard extends StatelessWidget {
             if (detection.details['trustpositif'] != null)
               _LayerRow(
                 label: 'Trustpositif',
-                isDetected: detection.details['trustpositif'] as bool,
+                isDetected: detection.details['trustpositif'] == true,
                 color: AppColors.trustpositif,
               ),
             if (detection.details['mobilenet_confidence'] != null)
               _LayerRow(
                 label: 'MobileNet',
-                isDetected:
-                    (detection.details['mobilenet_confidence'] as num) >= 0.5,
+                isDetected: (detection.details['mobilenet_confidence'] is num)
+                    ? (detection.details['mobilenet_confidence'] as num) >= 0.5
+                    : false,
                 color: AppColors.mobilenet,
-                extra:
-                    '${((detection.details['mobilenet_confidence'] as num) * 100).toStringAsFixed(0)}%',
+                extra: (detection.details['mobilenet_confidence'] is num)
+                    ? '${((detection.details['mobilenet_confidence'] as num) * 100).toStringAsFixed(0)}%'
+                    : '',
               ),
           ],
         ],
@@ -413,9 +498,7 @@ class _LayerRow extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isDetected
-                ? Icons.check_circle_rounded
-                : Icons.cancel_rounded,
+            isDetected ? Icons.check_circle_rounded : Icons.cancel_rounded,
             size: 16,
             color: isDetected ? color : AppColors.textSecondary,
           ),
@@ -427,7 +510,7 @@ class _LayerRow extends StatelessWidget {
               color: isDetected ? color : AppColors.textSecondary,
             ),
           ),
-          if (extra != null) ...[
+          if (extra != null && extra!.isNotEmpty) ...[
             const Spacer(),
             Text(
               extra!,
@@ -464,11 +547,8 @@ class _KeywordsSection extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(
-                Icons.text_fields_rounded,
-                size: 18,
-                color: AppColors.danger,
-              ),
+              Icon(Icons.text_fields_rounded,
+                  size: 18, color: AppColors.danger),
               SizedBox(width: 8),
               Text(
                 AppStrings.keywords,
@@ -493,9 +573,7 @@ class _KeywordsSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.danger.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.danger.withOpacity(0.3),
-                  ),
+                  border: Border.all(color: AppColors.danger.withOpacity(0.3)),
                 ),
                 child: Text(
                   keyword,
@@ -507,8 +585,8 @@ class _KeywordsSection extends StatelessWidget {
                 ),
               );
             }).toList(),
-            ),
-          ],
+          ),
+        ],
       ),
     );
   }
@@ -538,11 +616,8 @@ class _SuggestionSection extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 18,
-                color: AppColors.success,
-              ),
+              Icon(Icons.lightbulb_outline_rounded,
+                  size: 18, color: AppColors.success),
               SizedBox(width: 8),
               Text(
                 'Yang Bisa Kamu Lakukan 💡',

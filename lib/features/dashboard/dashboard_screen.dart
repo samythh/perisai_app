@@ -20,15 +20,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   String _userName = '';
 
+  // Variabel untuk menyimpan soket koneksi Realtime
+  late final RealtimeChannel _realtimeChannel;
+
   final FlutterLocalNotificationsPlugin _localNotif =
       FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
-    _loadData();
     _initLocalNotif();
-    _subscribeRealtime();
+
+    // PERBAIKAN ARSITEKTUR 1: Sinkronisasi Balapan Waktu (Race Condition)
+    // Tunggu _loadData() selesai mengunduh data anak, BARU nyalakan soket Realtime
+    _loadData().then((_) {
+      _subscribeRealtime();
+    });
+  }
+
+  @override
+  void dispose() {
+    // PENGAMANAN MEMORI: Matikan soket saat halaman ditutup agar RAM HP tidak bocor
+    Supabase.instance.client.removeChannel(_realtimeChannel);
+    super.dispose();
   }
 
   Future<void> _initLocalNotif() async {
@@ -37,30 +51,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _localNotif.initialize(settings);
   }
 
+  // PERBAIKAN ARSITEKTUR 2: Menggunakan PostgresChanges bukan Stream global
   void _subscribeRealtime() {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
-    Supabase.instance.client
-        .from('detections')
-        .stream(primaryKey: ['id']).listen((data) async {
-      if (data.isEmpty) return;
+    _realtimeChannel = Supabase.instance.client
+        .channel('public:detections')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'detections',
+          callback: (payload) {
+            final newData = payload.newRecord;
 
-      // Filter hanya deteksi milik anak ortu ini
-      final childIds = _children.map((c) => c.id).toList();
-      if (childIds.isEmpty) return;
+            if (newData.isEmpty) return;
 
-      final filtered =
-          data.where((d) => childIds.contains(d['child_id'])).toList();
+            // 1. Ambil kumpulan ID Anak yang sah milik orang tua ini
+            final childIds = _children.map((c) => c.id).toList();
+            if (childIds.isEmpty) return;
 
-      if (filtered.isEmpty) return;
+            // 2. Jika baris deteksi yang baru masuk adalah milik anak kita
+            if (childIds.contains(newData['child_id'])) {
+              // Tampilkan Notifikasi Darurat
+              _showLocalNotif(newData);
 
-      // Reload dashboard
-      _loadData();
-
-      // Tampilkan notif untuk deteksi terbaru
-      _showLocalNotif(filtered.first);
-    });
+              // Muat ulang daftar list di UI agar Realtime
+              _loadData();
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _showLocalNotif(Map<String, dynamic> data) async {
