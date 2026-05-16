@@ -7,9 +7,8 @@ import java.net.URL
 
 object SupabaseManager {
 
-    private var SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"  // TODO: Ganti dengan Project URL dari SHEVA, contoh: "https://abcdefg.supabase.co"
-    private var SERVICE_ROLE_KEY = "YOUR_SERVICE_ROLE_KEY"          // TODO: Ganti dengan Service Role Key dari SHEVA, contoh: "eyJhbGciOiJIUz..." (JANGAN commit ke Git!)
-
+    private var SUPABASE_URL = "https://dmjyqhlmswxrilofzpjx.supabase.co" 
+    private var SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtanlxaGxtc3d4cmlsb2Z6cGp4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODg3NDUxMywiZXhwIjoyMDk0NDUwNTEzfQ.cTNXMM4p_VMDyA2sd0ZysLpmOy6UYjTLmbhc0GwjOZk"
     fun initialize(url: String, key: String) { SUPABASE_URL = url; SERVICE_ROLE_KEY = key }
 
     fun uploadScreenshot(childId: String, imageBytes: ByteArray): String? {
