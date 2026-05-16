@@ -8,7 +8,7 @@ class AppColors {
 
   // Status
   static const Color danger       = Color(0xFFEF4444); // merah — judol terdeteksi
-  static const Color success      = Color(0xFF10B981); // hijau — aman
+  static const Color success      = Color(0xFF00AA13); // hijau gojek — online
   static const Color warning      = Color(0xFFF59E0B); // kuning — tidak aktif
 
   // Triggered by badge

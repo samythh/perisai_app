@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -48,6 +52,10 @@ class PerisaiService : Service() {
     // ← TAMBAHAN: tracking cooldown & deteksi terakhir
     private var lastGamblingDetectedMs = 0L
     private var isAnalyzing = false  // cegah concurrent analysis
+
+    // Boot heartbeat
+    private var bootHeartbeatTimer: java.util.Timer? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -97,9 +105,22 @@ class PerisaiService : Service() {
         }
 
         if (fromBoot && !hasMediaProjection) {
-            Log.w(TAG, "boot path tanpa MediaProjection — stopSelf")
-            stopSelf()
-            return START_NOT_STICKY
+            Log.d(TAG, "boot path — heartbeat mode (tanpa screen capture)")
+            val prefs = getSharedPreferences("perisai_prefs", Context.MODE_PRIVATE)
+            val childId = prefs.getString("child_id", "") ?: ""
+            if (childId.isNotBlank()) {
+                // Update status ke online dan mulai heartbeat
+                Thread {
+                    try {
+                        SupabaseManager.updateConnectionStatus(childId, "online")
+                        Log.d(TAG, "boot: status updated to online")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "boot: status update FAIL: ${e.message}", e)
+                    }
+                }.start()
+                startBootHeartbeat(childId)
+            }
+            return START_STICKY
         }
 
         if (isTest) {
@@ -134,8 +155,15 @@ class PerisaiService : Service() {
             }
         }
 
+        // Register network callback untuk auto-online saat internet kembali
+        val prefs = getSharedPreferences("perisai_prefs", Context.MODE_PRIVATE)
+        val childId = prefs.getString("child_id", "") ?: ""
+        if (childId.isNotBlank()) {
+            registerNetworkCallback(childId)
+        }
+
         sendEventToFlutter("service_started", null)
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun setupScreenCapture() {
@@ -430,8 +458,71 @@ private fun analyzeScreenshot(screenshotBytes: ByteArray) {
             .build()
     }
 
+    // ─── Boot heartbeat — kirim status online tiap 30 detik ───
+    private fun startBootHeartbeat(childId: String) {
+        bootHeartbeatTimer?.cancel()
+        bootHeartbeatTimer = java.util.Timer()
+        bootHeartbeatTimer?.scheduleAtFixedRate(object : java.util.TimerTask() {
+            override fun run() {
+                try {
+                    SupabaseManager.updateConnectionStatus(childId, "online")
+                    Log.d(TAG, "boot heartbeat OK")
+                } catch (e: Exception) {
+                    Log.e(TAG, "boot heartbeat FAIL: ${e.message}")
+                }
+            }
+        }, 30000L, 30000L)
+
+        // Register network callback — auto-online saat internet kembali
+        registerNetworkCallback(childId)
+    }
+
+    // ─── Network callback — deteksi internet kembali ───────────
+    private fun registerNetworkCallback(childId: String) {
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.d(TAG, "Internet tersedia — update status online")
+                    Thread {
+                        try {
+                            SupabaseManager.updateConnectionStatus(childId, "online")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "network callback update FAIL: ${e.message}")
+                        }
+                    }.start()
+                }
+
+                override fun onLost(network: Network) {
+                    Log.d(TAG, "Internet hilang")
+                }
+            }
+
+            cm.registerNetworkCallback(request, networkCallback!!)
+            Log.d(TAG, "network callback registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "registerNetworkCallback FAIL: ${e.message}", e)
+        }
+    }
+
     override fun onDestroy() {
         isRunning = false
+        bootHeartbeatTimer?.cancel()
+        bootHeartbeatTimer = null
+
+        // Unregister network callback
+        if (networkCallback != null) {
+            try {
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                cm.unregisterNetworkCallback(networkCallback!!)
+            } catch (_: Exception) {}
+            networkCallback = null
+        }
+
         virtualDisplay?.release()
         imageReader?.close()
         mediaProjection?.stop()

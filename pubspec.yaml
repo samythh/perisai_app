@@ -53,6 +53,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.3
 
 flutter:
   uses-material-design: true
@@ -65,3 +66,10 @@ flutter:
     - assets/images/Onboarding1.png
     - assets/images/Onboarding2.png
     - assets/images/Onboarding3.png
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/maskot.png"
+  adaptive_icon_background: "#1CB0F6"
+  adaptive_icon_foreground: "assets/images/maskot.png"
