@@ -49,6 +49,10 @@ class MainActivity : FlutterActivity() {
                         stopPerisaiService()
                         result.success(true)
                     }
+                    "sendTestEvent" -> {
+                        sendTestEvent()
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -109,5 +113,19 @@ class MainActivity : FlutterActivity() {
 
     private fun stopPerisaiService() {
         stopService(Intent(this, PerisaiService::class.java))
+    }
+
+    private fun sendTestEvent() {
+        val dummyJson = org.json.JSONObject().apply {
+            put("event_type", "gambling_detected")
+            put("is_gambling", true)
+            put("confidence", 0.91)
+            put("triggered_by", "combined")
+            put("child_id", "test-child-dummy-id")
+            put("screenshot_url", "https://test-dummy-screenshot.jpg")
+            put("keywords", org.json.JSONArray(listOf("SPIN", "BET")))
+            put("timestamp", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()))
+        }
+        eventSink?.success(dummyJson.toString())
     }
 }
