@@ -68,7 +68,264 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
     await prefs.setString('child_id', childId);
     await prefs.setString('role', 'child');
 
-    // Update status koneksi ke online di Supabase via RPC
+    if (!mounted) return;
+
+    // Tampilkan panduan izin sebelum minta permission
+    _showPermissionGuide(childId);
+  }
+
+  void _showPermissionGuide(String childId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.92,
+          ),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Icon sukses scan
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.success,
+                      size: 44,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Scan Berhasil! 🎉',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Satu langkah lagi untuk mengaktifkan\nperlindungan PERISAI',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Panduan langkah-langkah ──
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.info_outline_rounded,
+                                  color: AppColors.primary, size: 18),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Panduan Izin Perekaman Layar',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Step 1
+                        _buildGuideStep(
+                          number: '1',
+                          title: 'Pop-up izin akan muncul',
+                          desc: 'Setelah kamu tekan tombol di bawah, Android akan menampilkan pop-up izin perekaman layar.',
+                          icon: Icons.notifications_active_rounded,
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Step 2
+                        _buildGuideStep(
+                          number: '2',
+                          title: 'Pilih "Entire Screen"',
+                          desc: 'Pada pop-up tersebut, pastikan kamu memilih opsi "Entire Screen" atau "Seluruh Layar" agar PERISAI bisa memantau secara menyeluruh.',
+                          icon: Icons.smartphone_rounded,
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Step 3
+                        _buildGuideStep(
+                          number: '3',
+                          title: 'Tekan "Start" / "Mulai"',
+                          desc: 'Setelah memilih Entire Screen, tekan tombol Start atau Mulai untuk mengaktifkan perlindungan.',
+                          icon: Icons.play_circle_outline_rounded,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Warning box
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded,
+                            color: Color(0xFFF59E0B), size: 22),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Jika izin ditolak, PERISAI tidak bisa memantau dan HP anak tidak akan terlindungi.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF92400E),
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Tombol "Saya Paham"
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(sheetCtx);
+                        await _startServiceAndCheckPermission(childId);
+                      },
+                      child: const Text(
+                        'Saya Paham, Lanjutkan 🛡️',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGuideStep({
+    required String number,
+    required String title,
+    required String desc,
+    required IconData icon,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              number,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                desc,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Mulai service → tunggu hasil: service_started atau permission_denied
+  Future<void> _startServiceAndCheckPermission(String childId) async {
+    // Update status ke online di Supabase via RPC
     try {
       await Supabase.instance.client.rpc('update_child_connection', params: {
         'p_child_id': childId,
@@ -80,70 +337,13 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
       debugPrint('PERISAI: Gagal update status connect → $e');
     }
 
+    // Mulai service — permission popup akan muncul
     await ChannelService.startService(childId);
 
     if (!mounted) return;
 
-    // Tampilkan dialog sukses sebelum lanjut
-    _showSuccessDialog(childId);
-  }
-
-  void _showSuccessDialog(String childId) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_circle_rounded,
-                color: AppColors.success,
-                size: 48,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Yeay, berhasil! 🎉',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'HP kamu sekarang terhubung dengan\norang tua. PERISAI siap menjaga kamu!',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // Navigasi ke layar aktif
-                context.go('/active');
-              },
-              child: const Text('Oke, siap! 🛡️'),
-            ),
-          ],
-        ),
-      ),
-    );
+    // Navigasi ke layar aktif
+    context.go('/active');
   }
 
   @override

@@ -74,6 +74,9 @@ class ChannelService {
             case 'service_stopped':
               _handleServiceStopped(data);
               break;
+            case 'permission_denied':
+              _handlePermissionDenied();
+              break;
             default:
               debugPrint('PERISAI: Unknown event type → $eventType');
           }
@@ -198,14 +201,21 @@ class ChannelService {
   }
 
   // ─── Handler service_stopped ────────────────────────
-  static void _handleServiceStopped(Map<String, dynamic> data) {
+  static void _handleServiceStopped(Map<String, dynamic> data) async {
     debugPrint('PERISAI: Service berhenti ⚠️');
+
+    // Cek apakah HP ini mode anak — hanya tampilkan warning di mode anak
+    final prefs = await SharedPreferences.getInstance();
+    final childId = prefs.getString('child_id');
 
     // Update status ke Supabase → offline_manual
     _updateConnectionStatus('offline_manual');
 
     // Stop heartbeat
     _stopHeartbeat();
+
+    // Hanya tampilkan warning kalau ini HP anak
+    if (childId == null || childId.isEmpty) return;
 
     final context = navigatorKey.currentContext;
     if (context != null) {
@@ -224,6 +234,43 @@ class ChannelService {
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+  }
+
+  // ─── Handler permission_denied ────────────────────────
+  static void _handlePermissionDenied() async {
+    debugPrint('PERISAI: Izin ditolak — revert status ke offline_manual');
+
+    // Revert status via RPC
+    _updateConnectionStatus('offline_manual');
+    _stopHeartbeat();
+
+    // Hapus child_id dari local storage
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('child_id');
+    await prefs.remove('role');
+
+    final context = navigatorKey.currentContext;
+    if (context != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.block_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Izin ditolak — PERISAI tidak bisa memantau'),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

@@ -138,7 +138,26 @@ class MainActivity : FlutterActivity() {
                         startService(intent)
                     }
                 } else {
-                    Log.w(TAG, "MediaProjection denied — service NOT started")
+                    Log.w(TAG, "MediaProjection denied — service NOT started, reverting status")
+                    // Kirim event permission_denied ke Flutter
+                    val event = org.json.JSONObject().apply {
+                        put("event_type", "permission_denied")
+                    }
+                    eventSink?.success(event.toString())
+
+                    // Revert status koneksi ke offline_manual via Supabase RPC
+                    val prefs = getSharedPreferences("perisai_prefs", Context.MODE_PRIVATE)
+                    val childId = prefs.getString("child_id", "") ?: ""
+                    if (childId.isNotBlank()) {
+                        Thread {
+                            try {
+                                SupabaseManager.updateConnectionStatus(childId, "offline_manual")
+                                Log.d(TAG, "Status reverted to offline_manual")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Revert status FAIL: ${e.message}", e)
+                            }
+                        }.start()
+                    }
                 }
             }
         }

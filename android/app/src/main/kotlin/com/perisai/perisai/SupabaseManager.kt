@@ -106,4 +106,51 @@ object SupabaseManager {
             connection?.disconnect()
         }
     }
+    fun updateConnectionStatus(childId: String, status: String): Boolean {
+        Log.d(TAG, "updateConnectionStatus childId=$childId status=$status")
+
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL("$SUPABASE_URL/rest/v1/rpc/update_child_connection")
+            connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.setRequestProperty("Authorization", "Bearer $SERVICE_ROLE_KEY")
+            connection.setRequestProperty("apikey", SERVICE_ROLE_KEY)
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+
+            val payload = JSONObject().apply {
+                put("p_child_id", childId)
+                put("p_status", status)
+                put("p_last_seen", java.text.SimpleDateFormat(
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.getDefault()
+                ).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                    .format(java.util.Date()))
+            }
+
+            val outputStream = DataOutputStream(connection.outputStream)
+            outputStream.write(payload.toString().toByteArray(Charsets.UTF_8))
+            outputStream.flush()
+            outputStream.close()
+
+            val code = connection.responseCode
+            if (code in 200..299) {
+                Log.d(TAG, "updateConnectionStatus OK code=$code")
+                true
+            } else {
+                val errorBody = try {
+                    connection.errorStream?.bufferedReader()?.readText() ?: "<no body>"
+                } catch (e: Exception) { "<err reading error: ${e.message}>" }
+                Log.e(TAG, "updateConnectionStatus FAIL code=$code body=$errorBody")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "updateConnectionStatus exception: ${e.message}", e)
+            false
+        } finally {
+            connection?.disconnect()
+        }
+    }
 }
