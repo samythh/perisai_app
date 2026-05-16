@@ -43,33 +43,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     Supabase.instance.client
         .from('detections')
-        .stream(primaryKey: ['id'])
-        .listen((data) {
-          if (data.isEmpty) return;
-          _loadData();
-          _showLocalNotif(data.first);
-        });
+        .stream(primaryKey: ['id']).listen((data) async {
+      if (data.isEmpty) return;
+
+      // Filter hanya deteksi milik anak ortu ini
+      final childIds = _children.map((c) => c.id).toList();
+      if (childIds.isEmpty) return;
+
+      final filtered =
+          data.where((d) => childIds.contains(d['child_id'])).toList();
+
+      if (filtered.isEmpty) return;
+
+      // Reload dashboard
+      _loadData();
+
+      // Tampilkan notif untuk deteksi terbaru
+      _showLocalNotif(filtered.first);
+    });
   }
 
   Future<void> _showLocalNotif(Map<String, dynamic> data) async {
-    final confidence = ((data['confidence'] as num) * 100).toStringAsFixed(0);
-    final triggeredBy = data['triggered_by'] ?? '';
+    try {
+      // Handle confidence yang bisa String atau double
+      final rawConfidence = data['confidence'];
+      final confidence = rawConfidence is String
+          ? double.tryParse(rawConfidence) ?? 0.0
+          : (rawConfidence as num?)?.toDouble() ?? 0.0;
 
-    await _localNotif.show(
-      0,
-      '⚠️ Konten mencurigakan terdeteksi!',
-      'AI $confidence% yakin — terdeteksi via $triggeredBy',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'perisai_channel',
-          'PERISAI Deteksi',
-          channelDescription: 'Notifikasi deteksi judol dari PERISAI',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
+      final confidencePercent = (confidence * 100).toStringAsFixed(0);
+      final triggeredBy = data['triggered_by'] ?? '';
+
+      // Label triggered_by yang friendly
+      final triggeredByLabel = switch (triggeredBy) {
+        'ocr' => 'Baca Teks',
+        'mobilenet' => 'Lihat Gambar',
+        'trustpositif' => 'Cek URL',
+        'combined' => 'Kombinasi',
+        _ => triggeredBy,
+      };
+
+      await _localNotif.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000, // ID unik per notif
+        '⚠️ Konten judol terdeteksi!',
+        'AI $confidencePercent% yakin — terdeteksi via $triggeredByLabel',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'perisai_channel',
+            'PERISAI Deteksi',
+            channelDescription: 'Notifikasi deteksi judol dari PERISAI',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+            playSound: true,
+            enableVibration: true,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      debugPrint('PERISAI: Error show notif → $e');
+    }
   }
 
   Future<void> _loadData() async {

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/accessibility_service_description"
-    android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:notificationTimeout="3000"
+    android:accessibilityFlags="flagReportViewIds"
     android:canRetrieveWindowContent="true"
-    android:settingsActivity="com.perisai.perisai.MainActivity" />
+    android:description="@string/app_name"
+    android:notificationTimeout="3000"
+    android:packageNames="com.android.chrome,org.mozilla.firefox,com.opera.browser,com.brave.browser,com.microsoft.emmx,com.UCMobile.intl" />

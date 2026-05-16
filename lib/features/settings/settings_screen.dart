@@ -22,9 +22,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _userEmail = '';
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadData(); // ← reload setiap kali screen aktif kembali
+  }
+
+  @override
   void initState() {
     super.initState();
-    _loadData();
   }
 
   Future<void> _loadData() async {
@@ -285,21 +290,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirm == true) {
-      // TODO: hapus dari Supabase saat integrasi
-      setState(() {
-        _children.removeWhere((c) => c.id == child.id);
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('HP ${child.childName} sudah diputus'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+      try {
+        // Hapus dari Supabase
+        await Supabase.instance.client
+            .from('children')
+            .delete()
+            .eq('id', child.id);
+
+        // Reload data dari Supabase
+        await _loadData();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('HP ${child.childName} sudah diputus'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
-        ),
-      );
+        );
+      } catch (e) {
+        debugPrint('Delete error: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Gagal memutus koneksi, coba lagi?'),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     }
   }
 }
