@@ -12,6 +12,7 @@ import 'features/pairing/active_screen.dart';
 import 'features/education/education_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'services/channel_service.dart';
+import 'features/test/test_event_page.dart';
 
 final appRouter = GoRouter(
   navigatorKey: ChannelService.navigatorKey,
@@ -74,6 +75,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/active',
       builder: (context, state) => const ActiveScreen(),
+    ),
+    GoRoute(
+      path: '/test',
+      builder: (context, state) => const TestEventPage(),
     ),
   ],
 );
