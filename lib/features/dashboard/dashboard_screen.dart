@@ -110,9 +110,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _userName = user.userMetadata?['full_name'] ?? 'Orang Tua';
       });
 
+      // Ambil anak beserta avatar_url
       final childrenRes = await Supabase.instance.client
           .from('children')
-          .select()
+          .select('id, parent_id, child_name, age, created_at, avatar_url')
           .eq('parent_id', user.id);
 
       _children = (childrenRes as List).map((j) => Child.fromJson(j)).toList();
@@ -147,14 +148,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   int get _securityScore {
     if (_detections.isEmpty) return 100;
-    final score = 100 - (_detections.length * 5);
-    return score.clamp(0, 100);
+    return (100 - (_detections.length * 5)).clamp(0, 100);
   }
 
   Future<void> _logout() async {
     await Supabase.instance.client.auth.signOut();
     if (!mounted) return;
     context.go('/role-select');
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Mau keluar nih? 👋',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        content: const Text(
+          'Kamu bakal keluar dari akun PERISAI.\nData anak tetap aman kok!',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _logout();
+            },
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -174,11 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined,
-                color: AppColors.textPrimary),
-            onPressed: () => context.push('/settings'),
-          ),
+          // Hanya logout — settings sudah di navbar
           IconButton(
             icon:
                 const Icon(Icons.logout_rounded, color: AppColors.textPrimary),
@@ -248,56 +278,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               );
                             },
                           ),
-                    const SizedBox(height: 80),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
-
-      // FAB tambah anak
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/add-child'),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Tambah Anak',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
-  }
-
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Mau keluar nih? 👋',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-        content: const Text(
-          'Kamu bakal keluar dari akun PERISAI.\nData anak tetap aman kok!',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal',
-                style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _logout();
-            },
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
+      // FAB dihapus — sudah ada tombol + di navbar
     );
   }
 }
@@ -324,7 +310,6 @@ class _SummaryCards extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Total Terdeteksi
         Expanded(
           child: _SummaryCard(
             icon: Icons.warning_rounded,
@@ -335,8 +320,6 @@ class _SummaryCards extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-
-        // Screen Time (hari ini)
         Expanded(
           child: _SummaryCard(
             icon: Icons.today_rounded,
@@ -347,8 +330,6 @@ class _SummaryCards extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-
-        // Skor Keamanan
         Expanded(
           child: _SummaryCard(
             icon: Icons.shield_rounded,
@@ -447,7 +428,7 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-// ─── Children Row (horizontal scroll) ────────────────
+// ─── Children Row ─────────────────────────────────────
 class _ChildrenRow extends StatelessWidget {
   final List<Child> children;
   const _ChildrenRow({required this.children});
@@ -472,10 +453,7 @@ class _ChildrenRow extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             itemCount: children.length,
             separatorBuilder: (_, __) => const SizedBox(width: 16),
-            itemBuilder: (context, index) {
-              final child = children[index];
-              return _ChildAvatar(child: child);
-            },
+            itemBuilder: (_, index) => _ChildAvatar(child: children[index]),
           ),
         ),
       ],
@@ -487,7 +465,6 @@ class _ChildAvatar extends StatelessWidget {
   final Child child;
   const _ChildAvatar({required this.child});
 
-  // Nama pertama saja
   String get _firstName => child.childName.split(' ').first;
 
   @override
@@ -496,7 +473,7 @@ class _ChildAvatar extends StatelessWidget {
       children: [
         Stack(
           children: [
-            // Avatar
+            // Avatar — foto atau inisial
             Container(
               width: 56,
               height: 56,
@@ -508,19 +485,38 @@ class _ChildAvatar extends StatelessWidget {
                   width: 2,
                 ),
               ),
-              child: Center(
-                child: Text(
-                  _firstName[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+              child: child.avatarUrl != null && child.avatarUrl!.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        child.avatarUrl!,
+                        fit: BoxFit.cover,
+                        width: 56,
+                        height: 56,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Text(
+                            _firstName[0].toUpperCase(),
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        _firstName[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
             ),
 
-            // Dot hijau online di kiri atas
+            // Dot hijau online
             Positioned(
               top: 2,
               left: 2,
@@ -537,8 +533,6 @@ class _ChildAvatar extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-
-        // Nama pertama
         Text(
           _firstName,
           style: const TextStyle(
@@ -618,7 +612,7 @@ class _ActivityCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Avatar anak
+            // Avatar anak dengan danger badge
             Stack(
               clipBehavior: Clip.none,
               children: [
@@ -629,21 +623,42 @@ class _ActivityCard extends StatelessWidget {
                     color: AppColors.primary.withOpacity(0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Center(
-                    child: Text(
-                      child.childName.isNotEmpty
-                          ? child.childName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                  child: child.avatarUrl != null && child.avatarUrl!.isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            child.avatarUrl!,
+                            fit: BoxFit.cover,
+                            width: 44,
+                            height: 44,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(
+                                child.childName.isNotEmpty
+                                    ? child.childName[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Text(
+                            child.childName.isNotEmpty
+                                ? child.childName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
                 ),
 
-                // Danger triangle di kanan atas avatar
+                // Danger badge
                 Positioned(
                   top: -4,
                   right: -4,
@@ -669,7 +684,6 @@ class _ActivityCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title + waktu
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -694,8 +708,6 @@ class _ActivityCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-
-                  // Nama anak
                   Text(
                     _firstName,
                     style: const TextStyle(
@@ -705,8 +717,6 @@ class _ActivityCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-
-                  // Deskripsi
                   Text(
                     _desc,
                     style: const TextStyle(
@@ -721,7 +731,6 @@ class _ActivityCard extends StatelessWidget {
               ),
             ),
 
-            // Arrow
             const Icon(
               Icons.chevron_right_rounded,
               color: AppColors.textSecondary,
