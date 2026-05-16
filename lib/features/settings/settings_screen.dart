@@ -50,7 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final childrenRes = await Supabase.instance.client
           .from('children')
-          .select('id, parent_id, child_name, age, created_at, avatar_url')
+          .select()
           .eq('parent_id', user.id)
           .order('created_at', ascending: false);
 
@@ -367,7 +367,7 @@ class _ProfileCardState extends State<_ProfileCard> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.camera_alt_rounded,
@@ -380,7 +380,7 @@ class _ProfileCardState extends State<_ProfileCard> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.photo_library_rounded,
@@ -474,7 +474,7 @@ class _ProfileCardState extends State<_ProfileCard> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -489,7 +489,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                 width: 88,
                 height: 88,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.12),
+                  color: AppColors.primary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: _isUploading
@@ -649,7 +649,7 @@ class _ChildTile extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: child.avatarUrl != null && child.avatarUrl!.isNotEmpty
@@ -704,7 +704,7 @@ class _ChildTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
+              color: AppColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text('Aktif',

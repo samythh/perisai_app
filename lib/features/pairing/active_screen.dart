@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../services/channel_service.dart';
@@ -89,6 +90,20 @@ class _ActiveScreenState extends State<ActiveScreen>
     );
 
     if (confirm == true) {
+      // Update status di Supabase SEBELUM hapus child_id
+      if (_childId.isNotEmpty) {
+        try {
+          await Supabase.instance.client.rpc('update_child_connection', params: {
+            'p_child_id': _childId,
+            'p_status': 'offline_manual',
+            'p_last_seen': DateTime.now().toUtc().toIso8601String(),
+          });
+          debugPrint('PERISAI: Status berhasil diupdate → offline_manual ✅');
+        } catch (e) {
+          debugPrint('PERISAI: Gagal update status disconnect → $e');
+        }
+      }
+
       await ChannelService.stopService();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('child_id');
@@ -121,7 +136,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                     width: 160,
                     height: 160,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -149,7 +164,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                 Text(
                   'HP kamu terhubung dengan orang tua.\nPERISAI berjalan di latar belakang.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 14,
                     height: 1.6,
                   ),
@@ -162,7 +177,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Column(
@@ -196,7 +211,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      color: Colors.white.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -211,7 +226,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                         Text(
                           'Terhubung',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -220,7 +235,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                         Text(
                           '• ${_childId.substring(0, 8)}...',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                             fontSize: 12,
                           ),
                         ),
@@ -237,7 +252,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                   child: Text(
                     'Putus Koneksi',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 13,
                     ),
                   ),
@@ -289,7 +304,7 @@ class _InfoItem extends StatelessWidget {
           child: Text(
             text,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white.withValues(alpha: 0.9),
               fontSize: 13,
               height: 1.4,
             ),

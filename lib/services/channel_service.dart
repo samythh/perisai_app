@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChannelService {
   static const EventChannel _channel = EventChannel(
@@ -43,6 +46,9 @@ class ChannelService {
 
   static bool _isListening = false;
 
+  /// Timer heartbeat — update last_seen tiap 30 detik selama service aktif
+  static Timer? _heartbeatTimer;
+
   // Mulai listen event dari Daffa
   static void startListening() {
     if (_isListening) return;
@@ -82,6 +88,61 @@ class ChannelService {
     );
   }
 
+  // ─── Update status koneksi ke Supabase ──────────────
+  static Future<void> _updateConnectionStatus(String status) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final childId = prefs.getString('child_id');
+      if (childId == null || childId.isEmpty) {
+        debugPrint('PERISAI: Tidak bisa update status — child_id kosong');
+        return;
+      }
+
+      await Supabase.instance.client.rpc('update_child_connection', params: {
+        'p_child_id': childId,
+        'p_status': status,
+        'p_last_seen': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      debugPrint('PERISAI: Status koneksi diupdate → $status');
+    } catch (e) {
+      debugPrint('PERISAI: Gagal update status koneksi → $e');
+    }
+  }
+
+  // ─── Heartbeat — update last_seen berkala ────────────
+  static void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _sendHeartbeat(),
+    );
+    // Kirim langsung sekali
+    _sendHeartbeat();
+  }
+
+  static void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
+  static Future<void> _sendHeartbeat() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final childId = prefs.getString('child_id');
+      if (childId == null || childId.isEmpty) return;
+
+      await Supabase.instance.client.rpc('update_child_connection', params: {
+        'p_child_id': childId,
+        'p_status': 'online',
+        'p_last_seen': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      // Gagal heartbeat = internet mungkin mati — diam saja
+      debugPrint('PERISAI: Heartbeat gagal → $e');
+    }
+  }
+
   // ─── Handler gambling_detected ──────────────────────
   static void _handleGamblingDetected(Map<String, dynamic> data) {
     final keywords = List<String>.from(data['keywords'] ?? []);
@@ -108,6 +169,12 @@ class ChannelService {
   static void _handleServiceStarted(Map<String, dynamic> data) {
     debugPrint('PERISAI: Service mulai jalan ✅');
 
+    // Update status ke Supabase → online
+    _updateConnectionStatus('online');
+
+    // Mulai heartbeat
+    _startHeartbeat();
+
     final context = navigatorKey.currentContext;
     if (context != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,6 +200,12 @@ class ChannelService {
   // ─── Handler service_stopped ────────────────────────
   static void _handleServiceStopped(Map<String, dynamic> data) {
     debugPrint('PERISAI: Service berhenti ⚠️');
+
+    // Update status ke Supabase → offline_manual
+    _updateConnectionStatus('offline_manual');
+
+    // Stop heartbeat
+    _stopHeartbeat();
 
     final context = navigatorKey.currentContext;
     if (context != null) {

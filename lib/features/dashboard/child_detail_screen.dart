@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -20,12 +21,225 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
   List<Detection> _detections = [];
   bool _isLoading = true;
   late Child _child;
+  RealtimeChannel? _statusChannel;
 
   @override
   void initState() {
     super.initState();
     _child = widget.child;
     _loadDetections();
+    _refreshChildStatus();
+    _subscribeChildStatus();
+  }
+
+  @override
+  void dispose() {
+    if (_statusChannel != null) {
+      Supabase.instance.client.removeChannel(_statusChannel!);
+    }
+    super.dispose();
+  }
+
+  // Realtime listener — auto-refresh saat status anak berubah
+  void _subscribeChildStatus() {
+    _statusChannel = Supabase.instance.client
+        .channel('child_status_${_child.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'children',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: _child.id,
+          ),
+          callback: (payload) {
+            final newData = payload.newRecord;
+            if (newData.isEmpty || !mounted) return;
+            debugPrint('PERISAI: Detail — status berubah realtime!');
+            setState(() {
+              _child = Child.fromJson(newData);
+            });
+          },
+        )
+        .subscribe();
+  }
+
+  // Fetch fresh connection status dari DB
+  Future<void> _refreshChildStatus() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('children')
+          .select()
+          .eq('id', _child.id)
+          .single();
+      if (!mounted) return;
+      setState(() {
+        _child = Child.fromJson(data);
+      });
+    } catch (e) {
+      debugPrint('PERISAI: Gagal refresh child status → $e');
+    }
+  }
+
+  // ─── Show QR Bottom Sheet ───────────────────────────
+  void _showQrSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            // Drag handle
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Header icon
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.qr_code_2_rounded,
+                  color: AppColors.primary, size: 24),
+            ),
+            const SizedBox(height: 14),
+
+            // Title
+            Text(
+              'QR Akun ${_child.firstName}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Scan QR ini dari HP anak untuk\nmenghubungkan kembali',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // QR Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // QR Code
+                  QrImageView(
+                    data: _child.id,
+                    version: QrVersions.auto,
+                    size: 200,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.circle,
+                      color: AppColors.primary,
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.circle,
+                      color: Color(0xFF1A1A2E),
+                    ),
+                    gapless: true,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Child name badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person_rounded,
+                            color: AppColors.primary, size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          _child.childName,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Instruction
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      color: AppColors.primary, size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Buka PERISAI di HP anak → pilih "Saya Anak" → Scan QR ini',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showEditSheet() async {
@@ -43,8 +257,12 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModal) {
+      builder: (sheetCtx) {
+        // Ambil MediaQuery dari parent context (bukan sheet context)
+        // untuk menghindari crash _dependents.isEmpty
+        final screenHeight = MediaQuery.of(context).size.height;
+        return StatefulBuilder(
+        builder: (innerCtx, setModal) {
           // Hitung usia dari tanggal yang dipilih
           int computedAge = now.year - selectedDate.year;
           if (now.month < selectedDate.month ||
@@ -56,13 +274,13 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
 
           return Container(
             constraints:
-                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.88),
+                BoxConstraints(maxHeight: screenHeight * 0.88),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom),
+                bottom: MediaQuery.of(innerCtx).viewInsets.bottom),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -245,7 +463,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                           GestureDetector(
                             onTap: () async {
                               final picked = await showDatePicker(
-                                context: ctx,
+                                context: innerCtx,
                                 initialDate: selectedDate,
                                 firstDate: DateTime(now.year - 18),
                                 lastDate: now,
@@ -358,12 +576,13 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                                           phone: phoneVal,
                                           avatarUrl: newAvatarUrl,
                                           createdAt: _child.createdAt,
+                                          connectionStatus: _child.connectionStatus,
+                                          lastSeen: _child.lastSeen,
                                         );
+                                        // ignore: use_build_context_synchronously
+                                        Navigator.pop(innerCtx);
                                         if (!mounted) return;
                                         setState(() => _child = updated);
-                                        // ignore: use_build_context_synchronously
-                                        Navigator.pop(ctx);
-                                        if (!mounted) return;
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
                                             content: const Text(
@@ -412,11 +631,9 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
             ),
           );
         },
-      ),
+      );
+      },
     );
-
-    nameCtrl.dispose();
-    phoneCtrl.dispose();
   }
 
   Future<Uint8List?> _compressImage(Uint8List bytes) async {
@@ -563,6 +780,20 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                           ),
                         ),
                         GestureDetector(
+                          onTap: _showQrSheet,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.qr_code_rounded,
+                                color: Colors.white, size: 18),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
                           onTap: _showEditSheet,
                           child: Container(
                             width: 36,
@@ -633,16 +864,7 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                                     Positioned(
                                       bottom: 2,
                                       right: 2,
-                                      child: Container(
-                                        width: 14,
-                                        height: 14,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.success,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                              color: Colors.white, width: 2),
-                                        ),
-                                      ),
+                                      child: _buildStatusDot(child.effectiveStatus),
                                     ),
                                   ],
                                 ),
@@ -754,10 +976,18 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                   ),
                 ),
 
-                // ── Chart ──────────────────────────────
+                // ── Status Koneksi ──────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: _ConnectionStatusCard(child: child),
+                  ),
+                ),
+
+                // ── Chart ──────────────────────────────
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: _SectionCard(
                       title: 'Aktivitas Minggu Ini',
                       subtitle: 'Deteksi per hari',
@@ -817,6 +1047,201 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                 const SliverToBoxAdapter(child: SizedBox(height: 32)),
               ],
             ),
+    );
+  }
+
+  // ─── Status dot helper ──────────────────────────────
+  Widget _buildStatusDot(ConnectionStatus status) {
+    switch (status) {
+      case ConnectionStatus.online:
+        return Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: AppColors.success,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+        );
+      case ConnectionStatus.offlineInternet:
+        return Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: AppColors.danger,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+        );
+      case ConnectionStatus.offlineManual:
+        return Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: AppColors.warning,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: const Icon(
+            Icons.link_off_rounded,
+            size: 8,
+            color: Colors.white,
+          ),
+        );
+    }
+  }
+}
+
+// ─── Connection Status Card ───────────────────────────
+class _ConnectionStatusCard extends StatelessWidget {
+  final Child child;
+  const _ConnectionStatusCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color statusColor;
+    final IconData statusIcon;
+    final Color bgColor;
+
+    switch (child.effectiveStatus) {
+      case ConnectionStatus.online:
+        statusColor = AppColors.success;
+        statusIcon = Icons.wifi_rounded;
+        bgColor = AppColors.success.withValues(alpha: 0.06);
+      case ConnectionStatus.offlineInternet:
+        statusColor = AppColors.danger;
+        statusIcon = Icons.wifi_off_rounded;
+        bgColor = AppColors.danger.withValues(alpha: 0.06);
+      case ConnectionStatus.offlineManual:
+        statusColor = AppColors.warning;
+        statusIcon = Icons.link_off_rounded;
+        bgColor = AppColors.warning.withValues(alpha: 0.06);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Text(
+                'Status Koneksi',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              // Status chip
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: statusColor.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      child.connectionLabel,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Detail card
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Icon
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        child.connectionDescription,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textPrimary,
+                          height: 1.4,
+                        ),
+                      ),
+                      if (!child.isOnline && child.lastSeen != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Terakhir terlihat ${child.lastSeenText}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -62,6 +62,8 @@ class _SplashScreenState extends State<SplashScreen>
 
     final session = Supabase.instance.client.auth.currentSession;
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+
     final role = prefs.getString('role');
     final childId = prefs.getString('child_id');
 
@@ -89,27 +91,22 @@ class _SplashScreenState extends State<SplashScreen>
         fit: StackFit.expand,
         children: [
           // Background pattern bergeser
-          AnimatedBuilder(
-            animation: _bgAnimation,
-            builder: (_, __) {
-              return SlideTransition(
-                position: _bgAnimation,
-                child: Transform.scale(
-                  // Scale lebih besar biar tidak keliatan ujungnya
-                  scale: 1.5,
-                  child: Image.asset(
-                    'assets/images/splash.png',
-                    fit: BoxFit.cover,
-                    repeat: ImageRepeat.repeat,
-                  ),
-                ),
-              );
-            },
+          SlideTransition(
+            position: _bgAnimation,
+            child: Transform.scale(
+              // Scale lebih besar biar tidak keliatan ujungnya
+              scale: 1.5,
+              child: Image.asset(
+                'assets/images/splash.png',
+                fit: BoxFit.cover,
+                repeat: ImageRepeat.repeat,
+              ),
+            ),
           ),
 
           // Overlay warna primary supaya tetap branded
           Container(
-            color: AppColors.primary.withOpacity(0.6),
+            color: AppColors.primary.withValues(alpha: 0.6),
           ),
 
           // Konten tengah

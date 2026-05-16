@@ -121,7 +121,7 @@ class _EducationScreenState extends State<EducationScreen>
                         width: 120,
                         height: 120,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
+                          color: Colors.white.withValues(alpha: 0.08),
                           shape: BoxShape.circle,
                         ),
                         child: const Center(
@@ -151,10 +151,10 @@ class _EducationScreenState extends State<EducationScreen>
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.07),
+                        color: Colors.white.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                         ),
                       ),
                       child: const Text(
@@ -175,10 +175,10 @@ class _EducationScreenState extends State<EducationScreen>
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.danger.withOpacity(0.15),
+                          color: AppColors.danger.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: AppColors.danger.withOpacity(0.3),
+                            color: AppColors.danger.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Column(
@@ -202,7 +202,7 @@ class _EducationScreenState extends State<EducationScreen>
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.danger.withOpacity(0.3),
+                                    color: AppColors.danger.withValues(alpha: 0.3),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
@@ -231,9 +231,9 @@ class _EducationScreenState extends State<EducationScreen>
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _canDismiss
                               ? AppColors.success
-                              : Colors.white.withOpacity(0.2),
+                              : Colors.white.withValues(alpha: 0.2),
                           disabledBackgroundColor:
-                              Colors.white.withOpacity(0.2),
+                              Colors.white.withValues(alpha: 0.2),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -256,7 +256,7 @@ class _EducationScreenState extends State<EducationScreen>
                     Text(
                       'Pesan ini dikirim oleh orang tua kamu ❤️',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withValues(alpha: 0.4),
                         fontSize: 12,
                       ),
                     ),

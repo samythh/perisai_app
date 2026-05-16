@@ -34,7 +34,7 @@ class PerisaiService : Service() {
 
     private val NOTIFICATION_ID   = 1
     private val CHANNEL_ID        = "perisai_service_channel"
-    private val CAPTURE_INTERVAL  = 3000L    // interval screenshot 3 detik
+    private val CAPTURE_INTERVAL  = 7000L    // interval screenshot 3 detik
     private val GAMBLING_COOLDOWN = 30000L   // cooldown 30 detik setelah deteksi
 
     private var mediaProjection: MediaProjection? = null

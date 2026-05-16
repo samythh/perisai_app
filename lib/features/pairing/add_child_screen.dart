@@ -65,7 +65,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.camera_alt_rounded,
@@ -78,7 +78,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.photo_library_rounded,
@@ -161,6 +161,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
             'phone': _phoneController.text.trim().isEmpty
                 ? null
                 : _phoneController.text.trim(),
+            'connection_status': 'offline_manual',
           })
           .select()
           .single();
@@ -291,10 +292,10 @@ class _FormSection extends StatelessWidget {
                     width: 100,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppColors.primary.withOpacity(0.3),
+                        color: AppColors.primary.withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
@@ -570,7 +571,7 @@ class _QRSectionState extends State<_QRSection> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.check_circle_rounded,
@@ -675,13 +676,13 @@ class _QRSectionState extends State<_QRSection> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: _isConnected
-                ? AppColors.success.withOpacity(0.1)
-                : AppColors.primary.withOpacity(0.08),
+                ? AppColors.success.withValues(alpha: 0.1)
+                : AppColors.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: _isConnected
-                  ? AppColors.success.withOpacity(0.3)
-                  : AppColors.primary.withOpacity(0.2),
+                  ? AppColors.success.withValues(alpha: 0.3)
+                  : AppColors.primary.withValues(alpha: 0.2),
             ),
           ),
           child: Row(
@@ -716,7 +717,7 @@ class _QRSectionState extends State<_QRSection> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 20,
                 offset: const Offset(0, 4),
               ),

@@ -20,7 +20,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   String _userName = '';
 
-  late final RealtimeChannel _realtimeChannel;
+  RealtimeChannel? _realtimeChannel;
+  RealtimeChannel? _childrenChannel;
   final FlutterLocalNotificationsPlugin _localNotif =
       FlutterLocalNotificationsPlugin();
 
@@ -28,12 +29,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _initLocalNotif();
-    _loadData().then((_) => _subscribeRealtime());
+    _loadData().then((_) {
+      if (mounted) {
+        _subscribeRealtime();
+        _subscribeChildrenStatus();
+      }
+    });
   }
 
   @override
   void dispose() {
-    Supabase.instance.client.removeChannel(_realtimeChannel);
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
+    if (_childrenChannel != null) {
+      Supabase.instance.client.removeChannel(_childrenChannel!);
+    }
     super.dispose();
   }
 
@@ -56,6 +67,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final childIds = _children.map((c) => c.id).toList();
             if (childIds.contains(newData['child_id'])) {
               _showLocalNotif(newData);
+              _loadData();
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  // Auto-refresh saat status koneksi anak berubah di DB
+  void _subscribeChildrenStatus() {
+    _childrenChannel = Supabase.instance.client
+        .channel('public:children_status')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'children',
+          callback: (payload) {
+            final newData = payload.newRecord;
+            if (newData.isEmpty) return;
+            final childIds = _children.map((c) => c.id).toList();
+            if (childIds.contains(newData['id'])) {
+              debugPrint('PERISAI: Status anak berubah → reload dashboard');
               _loadData();
             }
           },
@@ -113,7 +145,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Ambil anak beserta avatar_url
       final childrenRes = await Supabase.instance.client
           .from('children')
-          .select('id, parent_id, child_name, age, created_at, avatar_url')
+          .select()
           .eq('parent_id', user.id);
 
       _children = (childrenRes as List).map((j) => Child.fromJson(j)).toList();
@@ -372,7 +404,7 @@ class _SummaryCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -384,7 +416,7 @@ class _SummaryCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
+              color: iconColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: iconColor, size: 18),
@@ -469,22 +501,34 @@ class _ChildAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Warna border berdasarkan status koneksi
+    final Color borderColor;
+    switch (child.effectiveStatus) {
+      case ConnectionStatus.online:
+        borderColor = AppColors.success;
+      case ConnectionStatus.offlineInternet:
+        borderColor = AppColors.danger;
+      case ConnectionStatus.offlineManual:
+        borderColor = AppColors.warning;
+    }
+
     return GestureDetector(
       onTap: () => context.push('/child/${child.id}', extra: child),
       child: Column(
       children: [
         Stack(
+          clipBehavior: Clip.none,
           children: [
             // Avatar — foto atau inisial
             Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.12),
+                color: AppColors.primary.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: AppColors.primary.withOpacity(0.3),
-                  width: 2,
+                  color: borderColor.withValues(alpha: 0.5),
+                  width: 2.5,
                 ),
               ),
               child: child.avatarUrl != null && child.avatarUrl!.isNotEmpty
@@ -518,19 +562,11 @@ class _ChildAvatar extends StatelessWidget {
                     ),
             ),
 
-            // Dot hijau online
+            // Status indicator — dinamis berdasarkan connection status
             Positioned(
-              top: 2,
-              left: 2,
-              child: Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-              ),
+              top: 0,
+              left: 0,
+              child: _ConnectionDot(status: child.effectiveStatus, size: 16),
             ),
           ],
         ),
@@ -547,6 +583,57 @@ class _ChildAvatar extends StatelessWidget {
       ],
       ),
     );
+  }
+}
+
+/// Widget indikator koneksi kecil — reusable
+class _ConnectionDot extends StatelessWidget {
+  final ConnectionStatus status;
+  final double size;
+  const _ConnectionDot({required this.status, this.size = 14});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (status) {
+      case ConnectionStatus.online:
+        // Bulat hijau
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AppColors.success,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+        );
+      case ConnectionStatus.offlineInternet:
+        // Bulat merah
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AppColors.danger,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+        );
+      case ConnectionStatus.offlineManual:
+        // Ikon kabel terputus
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AppColors.warning,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          child: Icon(
+            Icons.link_off_rounded,
+            size: size * 0.55,
+            color: Colors.white,
+          ),
+        );
+    }
   }
 }
 
@@ -606,7 +693,7 @@ class _ActivityCard extends StatelessWidget {
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -623,7 +710,7 @@ class _ActivityCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.12),
+                    color: AppColors.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: child.avatarUrl != null && child.avatarUrl!.isNotEmpty

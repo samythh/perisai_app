@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../services/channel_service.dart';
@@ -66,6 +67,19 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('child_id', childId);
     await prefs.setString('role', 'child');
+
+    // Update status koneksi ke online di Supabase via RPC
+    try {
+      await Supabase.instance.client.rpc('update_child_connection', params: {
+        'p_child_id': childId,
+        'p_status': 'online',
+        'p_last_seen': DateTime.now().toUtc().toIso8601String(),
+      });
+      debugPrint('PERISAI: Status berhasil diupdate → online ✅');
+    } catch (e) {
+      debugPrint('PERISAI: Gagal update status connect → $e');
+    }
+
     await ChannelService.startService(childId);
 
     if (!mounted) return;
@@ -89,7 +103,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -227,7 +241,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
