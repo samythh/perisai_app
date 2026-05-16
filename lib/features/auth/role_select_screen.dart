@@ -2,17 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_strings.dart';
 
-class RoleSelectScreen extends StatelessWidget {
+class RoleSelectScreen extends StatefulWidget {
   const RoleSelectScreen({super.key});
 
-  Future<void> _selectRole(BuildContext context, String role) async {
+  @override
+  State<RoleSelectScreen> createState() => _RoleSelectScreenState();
+}
+
+class _RoleSelectScreenState extends State<RoleSelectScreen> {
+  String? _selectedRole;
+
+  void _selectRole(String role) {
+    HapticFeedback.lightImpact();
+    setState(() => _selectedRole = role);
+  }
+
+  void _continue() {
+    if (_selectedRole == null) return;
     HapticFeedback.lightImpact();
 
-    if (!context.mounted) return;
-
-    if (role == 'parent') {
+    if (_selectedRole == 'parent') {
       context.push('/login');
     } else {
       context.push('/scan-qr');
@@ -22,162 +32,261 @@ class RoleSelectScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // Header biru
+          _HeaderSection(),
 
-              // Header
-              const Text(
-                '🛡️',
-                style: TextStyle(fontSize: 48),
+          // List role
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 24,
               ),
-              const SizedBox(height: 16),
-              const Text(
-                AppStrings.roleSelectTitle,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+              child: Column(
+                children: [
+                  _RoleOption(
+                    image: 'assets/images/orangtua.png',
+                    label: 'Orang Tua',
+                    isSelected: _selectedRole == 'parent',
+                    onTap: () => _selectRole('parent'),
+                  ),
+                  const SizedBox(height: 12),
+                  _RoleOption(
+                    image: 'assets/images/anak.png',
+                    label: 'Anak', // ← diubah
+                    isSelected: _selectedRole == 'child',
+                    onTap: () => _selectRole('child'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Tombol Lanjutkan
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _selectedRole == null ? null : _continue,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _selectedRole == null
+                      ? const Color(0xFFE5E5E5)
+                      : AppColors.primary,
+                  disabledBackgroundColor: const Color(0xFFE5E5E5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Pilih dulu ya, biar PERISAI tau\nmau nampilin apa buat kamu.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-
-              const Spacer(),
-
-              // Card Orang Tua
-              _RoleCard(
-                emoji: '👨‍👩‍👧',
-                title: AppStrings.roleParent,
-                desc: AppStrings.roleParentDesc,
-                color: AppColors.primary,
-                onTap: () => _selectRole(context, 'parent'),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Card Anak
-              _RoleCard(
-                emoji: '👦',
-                title: AppStrings.roleChild,
-                desc: AppStrings.roleChildDesc,
-                color: AppColors.success,
-                onTap: () => _selectRole(context, 'child'),
-              ),
-
-              const Spacer(),
-
-              // Footer
-              Center(
                 child: Text(
-                  'PERISAI v1.0.0',
+                  'LANJUTKAN',
                   style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: _selectedRole == null
+                        ? const Color(0xFFAAAAAA)
+                        : Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _RoleCard extends StatelessWidget {
-  final String emoji;
-  final String title;
-  final String desc;
-  final Color color;
+// ─── Header Biru ──────────────────────────────────────
+class _HeaderSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: MediaQuery.of(context).size.height * 0.38,
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Background splash pattern
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+              child: Image.asset(
+                'assets/images/splash.png',
+                fit: BoxFit.cover,
+                opacity: const AlwaysStoppedAnimation(0.15),
+              ),
+            ),
+          ),
+
+          // Konten — di bawah, hampir sejajar garis bawah
+          Positioned(
+            bottom: 24, // ← jarak dari bawah widget biru
+            left: 24,
+            right: 24,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end, // ← sejajar bawah
+              children: [
+                // Maskot di kiri — lebih besar
+                Image.asset(
+                  'assets/images/maskot.png',
+                  width: 130, // ← dibesarkan
+                  height: 130,
+                ),
+
+                const SizedBox(width: 8),
+
+                // Speech bubble di kanan
+                Expanded(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Segitiga ekor di kiri bubble
+                      Positioned(
+                        left: -12,
+                        top: 0,
+                        bottom: 0,
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: ClipPath(
+                            clipper: _BubbleTailClipper(),
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Bubble
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Text(
+                          'Halo! Ayo pilih peran\nkamu di Perisai',
+                          style: TextStyle(
+                            fontSize: 16, // ← dibesarkan
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Segitiga mengarah ke kiri
+class _BubbleTailClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(size.width, 0);
+    path.lineTo(0, size.height / 2);
+    path.lineTo(size.width, size.height);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+
+// ─── Role Option ──────────────────────────────────────
+class _RoleOption extends StatelessWidget {
+  final String image;
+  final String label;
+  final bool isSelected;
   final VoidCallback onTap;
 
-  const _RoleCard({
-    required this.emoji,
-    required this.title,
-    required this.desc,
-    required this.color,
+  const _RoleOption({
+    required this.image,
+    required this.label,
+    required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(20),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: color.withOpacity(0.3),
-            width: 1.5,
+            color: isSelected ? AppColors.primary : const Color(0xFFE5E5E5),
+            width: isSelected ? 2.5 : 1.5,
           ),
         ),
         child: Row(
           children: [
-            // Emoji
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  emoji,
-                  style: const TextStyle(fontSize: 32),
+            Image.asset(
+              image,
+              width: 48,
+              height: 48,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color:
+                      isSelected ? AppColors.primary : AppColors.textSecondary,
                 ),
               ),
             ),
-            const SizedBox(width: 16),
-
-            // Text
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    desc,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+            if (isSelected)
+              Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
               ),
-            ),
-
-            // Arrow
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: color,
-              size: 18,
-            ),
           ],
         ),
       ),

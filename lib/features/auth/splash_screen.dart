@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_strings.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -13,33 +12,49 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+    with TickerProviderStateMixin {
+  late AnimationController _bgController;
+  late AnimationController _contentController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  late Animation<Offset> _bgAnimation;
 
   @override
   void initState() {
     super.initState();
 
-    // Animasi logo
-    _controller = AnimationController(
+    // Animasi background geser — loop terus
+    _bgController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+
+    _bgAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(-0.3, -0.3),
+    ).animate(
+      CurvedAnimation(parent: _bgController, curve: Curves.linear),
+    );
+
+    // Animasi konten fade + scale
+    _contentController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
 
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+      CurvedAnimation(parent: _contentController, curve: Curves.easeIn),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _contentController,
+        curve: Curves.elasticOut,
+      ),
     );
+    _contentController.forward();
 
-    _controller.forward();
-
-    // Cek session & role setelah 2 detik
-    Future.delayed(const Duration(seconds: 2), _checkAndNavigate);
+    Future.delayed(const Duration(seconds: 3), _checkAndNavigate);
   }
 
   Future<void> _checkAndNavigate() async {
@@ -47,26 +62,22 @@ class _SplashScreenState extends State<SplashScreen>
 
     final session = Supabase.instance.client.auth.currentSession;
     final prefs = await SharedPreferences.getInstance();
-    final role = prefs.getString('role'); // 'parent' atau 'child'
+    final role = prefs.getString('role');
     final childId = prefs.getString('child_id');
 
-    if (!mounted) return;
-
     if (session != null && role == 'parent') {
-      // Parent sudah login → dashboard
       context.go('/dashboard');
     } else if (role == 'child' && childId != null) {
-      // Anak sudah pernah scan QR → langsung scan-qr
-      context.go('/scan-qr');
+      context.go('/active');
     } else {
-      // Belum ada session / belum paired → pilih role dulu
       context.go('/role-select');
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _bgController.dispose();
+    _contentController.dispose();
     super.dispose();
   }
 
@@ -74,67 +85,61 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.primary,
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: ScaleTransition(
-            scale: _scaleAnimation,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo shield
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.shield_rounded,
-                    size: 72,
-                    color: Colors.white,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background pattern bergeser
+          AnimatedBuilder(
+            animation: _bgAnimation,
+            builder: (_, __) {
+              return SlideTransition(
+                position: _bgAnimation,
+                child: Transform.scale(
+                  // Scale lebih besar biar tidak keliatan ujungnya
+                  scale: 1.5,
+                  child: Image.asset(
+                    'assets/images/splash.png',
+                    fit: BoxFit.cover,
+                    repeat: ImageRepeat.repeat,
                   ),
                 ),
-                const SizedBox(height: 24),
+              );
+            },
+          ),
 
-                // Nama app
-                const Text(
-                  AppStrings.appName,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 40,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 4,
-                  ),
+          // Overlay warna primary supaya tetap branded
+          Container(
+            color: AppColors.primary.withOpacity(0.6),
+          ),
+
+          // Konten tengah
+          Center(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Maskot
+                    Image.asset(
+                      'assets/images/maskot.png',
+                      width: 180,
+                      height: 180,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Teks PERISAI
+                    Image.asset(
+                      'assets/images/text_maskot.png',
+                      width: 300,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-
-                // Tagline
-                Text(
-                  AppStrings.appTagline,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-
-                const SizedBox(height: 48),
-
-                // Loading indicator
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white.withOpacity(0.7),
-                    strokeWidth: 2,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

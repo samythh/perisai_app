@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
@@ -19,10 +20,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   String _userName = '';
 
+  final FlutterLocalNotificationsPlugin _localNotif =
+      FlutterLocalNotificationsPlugin();
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    _initLocalNotif();
+    _subscribeRealtime();
+  }
+
+  Future<void> _initLocalNotif() async {
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const settings = InitializationSettings(android: android);
+    await _localNotif.initialize(settings);
+  }
+
+  void _subscribeRealtime() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    Supabase.instance.client
+        .from('detections')
+        .stream(primaryKey: ['id'])
+        .listen((data) {
+          if (data.isEmpty) return;
+          _loadData();
+          _showLocalNotif(data.first);
+        });
+  }
+
+  Future<void> _showLocalNotif(Map<String, dynamic> data) async {
+    final confidence = ((data['confidence'] as num) * 100).toStringAsFixed(0);
+    final triggeredBy = data['triggered_by'] ?? '';
+
+    await _localNotif.show(
+      0,
+      '⚠️ Konten mencurigakan terdeteksi!',
+      'AI $confidence% yakin — terdeteksi via $triggeredBy',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'perisai_channel',
+          'PERISAI Deteksi',
+          channelDescription: 'Notifikasi deteksi judol dari PERISAI',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+    );
   }
 
   Future<void> _loadData() async {
