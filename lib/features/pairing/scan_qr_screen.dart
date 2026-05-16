@@ -50,9 +50,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'QR Code-nya bukan dari PERISAI nih 🤔 Coba scan ulang ya',
-          ),
+          content: const Text('QR Code tidak valid. Coba scan ulang.'),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -84,145 +82,101 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
       builder: (sheetCtx) {
         return Container(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.92,
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
           ),
           decoration: const BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Handle bar
-                  Container(
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2),
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Icon sukses scan
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_rounded,
-                      color: AppColors.success,
-                      size: 44,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Scan Berhasil! 🎉',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Satu langkah lagi untuk mengaktifkan\nperlindungan PERISAI',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      height: 1.5,
-                    ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 28),
 
-                  // ── Panduan langkah-langkah ──
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.15),
+                  // Icon
+                  const Center(
+                    child: Icon(
+                      Icons.verified_user_rounded,
+                      color: AppColors.primary,
+                      size: 48,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: Text(
+                      'Izin Diperlukan',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.info_outline_rounded,
-                                  color: AppColors.primary, size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'Panduan Izin Perekaman Layar',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  const Center(
+                    child: Text(
+                      'PERISAI perlu akses perekaman layar\nuntuk bisa melindungi perangkat ini.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
 
-                        // Step 1
-                        _buildGuideStep(
-                          number: '1',
-                          title: 'Pop-up izin akan muncul',
-                          desc: 'Setelah kamu tekan tombol di bawah, Android akan menampilkan pop-up izin perekaman layar.',
-                          icon: Icons.notifications_active_rounded,
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Step 2
-                        _buildGuideStep(
-                          number: '2',
-                          title: 'Pilih "Entire Screen"',
-                          desc: 'Pada pop-up tersebut, pastikan kamu memilih opsi "Entire Screen" atau "Seluruh Layar" agar PERISAI bisa memantau secara menyeluruh.',
-                          icon: Icons.smartphone_rounded,
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Step 3
-                        _buildGuideStep(
-                          number: '3',
-                          title: 'Tekan "Start" / "Mulai"',
-                          desc: 'Setelah memilih Entire Screen, tekan tombol Start atau Mulai untuk mengaktifkan perlindungan.',
-                          icon: Icons.play_circle_outline_rounded,
-                        ),
-                      ],
+                  // Langkah
+                  const Text(
+                    'Cara mengizinkan:',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Warning box
+                  _buildStep('1', 'Akan muncul pop-up dari sistem Android'),
+                  const SizedBox(height: 12),
+                  _buildStep('2', 'Pilih "Entire Screen" (seluruh layar)'),
+                  const SizedBox(height: 12),
+                  _buildStep('3', 'Ketuk tombol "Start" untuk memulai'),
+
+                  const SizedBox(height: 24),
+
+                  // Catatan
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.warning_amber_rounded,
-                            color: Color(0xFFF59E0B), size: 22),
+                        Icon(Icons.info_outline_rounded,
+                            color: Color(0xFFD97706), size: 18),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Jika izin ditolak, PERISAI tidak bisa memantau dan HP anak tidak akan terlindungi.',
+                            'Kalau izin tidak diberikan, PERISAI tidak bisa berjalan di perangkat ini.',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               color: Color(0xFF92400E),
                               height: 1.4,
                             ),
@@ -231,12 +185,12 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
-                  // Tombol "Saya Paham"
+                  // Tombol
                   SizedBox(
                     width: double.infinity,
-                    height: 52,
+                    height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -250,10 +204,10 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                         await _startServiceAndCheckPermission(childId);
                       },
                       child: const Text(
-                        'Saya Paham, Lanjutkan 🛡️',
+                        'Lanjutkan',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
                           color: Colors.white,
                         ),
                       ),
@@ -268,62 +222,42 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
     );
   }
 
-  Widget _buildGuideStep({
-    required String number,
-    required String title,
-    required String desc,
-    required IconData icon,
-  }) {
+  Widget _buildStep(String number, String text) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 28, height: 28,
+          width: 26, height: 26,
           decoration: BoxDecoration(
-            color: AppColors.primary,
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Center(
             child: Text(
               number,
               style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                desc,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  height: 1.4,
-                ),
-              ),
-            ],
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textPrimary,
+              height: 1.4,
+            ),
           ),
         ),
       ],
     );
   }
 
-  /// Mulai service → tunggu hasil: service_started atau permission_denied
+  /// Mulai service dan minta izin
   Future<void> _startServiceAndCheckPermission(String childId) async {
     // Update status ke online di Supabase via RPC
     try {
@@ -332,18 +266,15 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
         'p_status': 'online',
         'p_last_seen': DateTime.now().toUtc().toIso8601String(),
       });
-      debugPrint('PERISAI: Status berhasil diupdate → online ✅');
+      debugPrint('PERISAI: Status diupdate ke online');
     } catch (e) {
-      debugPrint('PERISAI: Gagal update status connect → $e');
+      debugPrint('PERISAI: Gagal update status → $e');
     }
 
-    // Mulai service — permission popup akan muncul
+    // Mulai service — permission popup akan muncul di atas kamera
+    // Navigasi ke /active ditangani oleh _handleServiceStarted
+    // setelah izin benar-benar diberikan
     await ChannelService.startService(childId);
-
-    if (!mounted) return;
-
-    // Navigasi ke layar aktif
-    context.go('/active');
   }
 
   @override
@@ -419,13 +350,9 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                   ),
                   child: const Stack(
                     children: [
-                      // Sudut kiri atas
                       _Corner(top: 0, left: 0),
-                      // Sudut kanan atas
                       _Corner(top: 0, right: 0),
-                      // Sudut kiri bawah
                       _Corner(bottom: 0, left: 0),
-                      // Sudut kanan bawah
                       _Corner(bottom: 0, right: 0),
                     ],
                   ),

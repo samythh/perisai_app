@@ -170,7 +170,7 @@ class ChannelService {
 
   // ─── Handler service_started ────────────────────────
   static void _handleServiceStarted(Map<String, dynamic> data) {
-    debugPrint('PERISAI: Service mulai jalan ✅');
+    debugPrint('PERISAI: Service mulai jalan');
 
     // Update status ke Supabase → online
     _updateConnectionStatus('online');
@@ -180,23 +180,8 @@ class ChannelService {
 
     final context = navigatorKey.currentContext;
     if (context != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.shield_rounded, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text('PERISAI aktif melindungi kamu 🛡️'),
-            ],
-          ),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      // Navigasi ke layar aktif — izin sudah diberikan
+      GoRouter.of(context).go('/active');
     }
   }
 
@@ -264,7 +249,7 @@ class ChannelService {
               Icon(Icons.block_rounded, color: Colors.white, size: 18),
               SizedBox(width: 8),
               Expanded(
-                child: Text('Izin ditolak — PERISAI tidak bisa memantau'),
+                child: Text('Izin ditolak — PERISAI tidak aktif'),
               ),
             ],
           ),
@@ -276,6 +261,9 @@ class ChannelService {
           ),
         ),
       );
+
+      // Kembali ke role-select — active screen tidak boleh tampil
+      GoRouter.of(context).go('/role-select');
     }
   }
 }

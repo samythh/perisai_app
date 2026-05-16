@@ -18,13 +18,14 @@ class _ActiveScreenState extends State<ActiveScreen>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   String _childId = '';
+  String _parentName = '';
 
   @override
   void initState() {
     super.initState();
-    _loadChildId();
+    _loadData();
 
-    // Animasi shield naik turun
+    // Animasi maskot naik turun
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -35,10 +36,39 @@ class _ActiveScreenState extends State<ActiveScreen>
     );
   }
 
-  Future<void> _loadChildId() async {
+  Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
+    final childId = prefs.getString('child_id') ?? '';
+
+    if (childId.isEmpty) return;
+
+    // Ambil data anak untuk dapatkan parent_id
+    String parentName = '';
+    try {
+      final childData = await Supabase.instance.client
+          .from('children')
+          .select('parent_id')
+          .eq('id', childId)
+          .single();
+
+      final parentId = childData['parent_id'] as String;
+
+      // Ambil nama parent
+      final parentData = await Supabase.instance.client
+          .from('parents')
+          .select('name')
+          .eq('id', parentId)
+          .single();
+
+      parentName = parentData['name'] as String? ?? '';
+    } catch (e) {
+      debugPrint('PERISAI: Gagal ambil data parent → $e');
+    }
+
+    if (!mounted) return;
     setState(() {
-      _childId = prefs.getString('child_id') ?? '';
+      _childId = childId;
+      _parentName = parentName;
     });
   }
 
@@ -57,14 +87,14 @@ class _ActiveScreenState extends State<ActiveScreen>
           borderRadius: BorderRadius.circular(20),
         ),
         title: const Text(
-          'Mau putus koneksi? 🤔',
+          'Putus koneksi?',
           style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 18,
           ),
         ),
         content: const Text(
-          'Kalau putus, orang tua nggak bisa\npantau HP kamu lagi.',
+          'Orang tua tidak bisa memantau HP kamu kalau koneksi diputus.',
           style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
@@ -98,7 +128,7 @@ class _ActiveScreenState extends State<ActiveScreen>
             'p_status': 'offline_manual',
             'p_last_seen': DateTime.now().toUtc().toIso8601String(),
           });
-          debugPrint('PERISAI: Status berhasil diupdate → offline_manual ✅');
+          debugPrint('PERISAI: Status diupdate ke offline_manual');
         } catch (e) {
           debugPrint('PERISAI: Gagal update status disconnect → $e');
         }
@@ -129,24 +159,16 @@ class _ActiveScreenState extends State<ActiveScreen>
               children: [
                 const Spacer(),
 
-                // Shield animasi
+                // Maskot animasi
                 ScaleTransition(
                   scale: _scaleAnimation,
-                  child: Container(
+                  child: Image.asset(
+                    'assets/images/maskot.png',
                     width: 160,
                     height: 160,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.shield_rounded,
-                      size: 90,
-                      color: Colors.white,
-                    ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
 
                 // Status teks
                 const Text(
@@ -159,10 +181,12 @@ class _ActiveScreenState extends State<ActiveScreen>
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
                 Text(
-                  'HP kamu terhubung dengan orang tua.\nPERISAI berjalan di latar belakang.',
+                  _parentName.isNotEmpty
+                      ? 'Terhubung dengan $_parentName.\nPERISAI berjalan di latar belakang.'
+                      : 'PERISAI berjalan di latar belakang.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 14,
@@ -170,7 +194,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 36),
 
                 // Info box
                 Container(
@@ -184,18 +208,18 @@ class _ActiveScreenState extends State<ActiveScreen>
                     children: [
                       _InfoItem(
                         icon: Icons.visibility_outlined,
-                        text: 'PERISAI scan layar secara berkala',
+                        text: 'Layar dipindai secara berkala',
                       ),
                       SizedBox(height: 16),
                       _InfoItem(
                         icon: Icons.notifications_outlined,
                         text:
-                            'Orang tua langsung dikabarin kalau ada yang mencurigakan',
+                            'Orang tua langsung diberitahu kalau ada aktivitas mencurigakan',
                       ),
                       SizedBox(height: 16),
                       _InfoItem(
-                        icon: Icons.favorite_outline_rounded,
-                        text: 'Ini semua demi kebaikan kamu ya 😊',
+                        icon: Icons.lock_outline_rounded,
+                        text: 'Data kamu aman dan hanya bisa dilihat orang tua',
                       ),
                     ],
                   ),
@@ -224,19 +248,13 @@ class _ActiveScreenState extends State<ActiveScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Terhubung',
+                          _parentName.isNotEmpty
+                              ? 'Terhubung dengan $_parentName'
+                              : 'Terhubung',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.9),
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '• ${_childId.substring(0, 8)}...',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -245,8 +263,7 @@ class _ActiveScreenState extends State<ActiveScreen>
 
                 const SizedBox(height: 16),
 
-                // Tombol putus koneksi — kecil di bawah
-// Tombol putus koneksi — kecil di bawah
+                // Tombol putus koneksi
                 TextButton(
                   onPressed: _disconnect,
                   child: Text(
@@ -258,7 +275,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                   ),
                 ),
 
-// Tombol test — HAPUS sebelum presentasi
+                // Tombol test — HAPUS sebelum presentasi
                 TextButton.icon(
                   onPressed: () async {
                     await ChannelService.sendTestEvent();
