@@ -57,12 +57,12 @@ class _DetectionDetailScreenState extends State<DetectionDetailScreen> {
             final childRes = await Supabase.instance.client
                 .from('children')
                 .select(
-                    'Phone') // Sesuaikan nama kolom jika berbeda (misal: 'no_hp' atau 'phone')
+                    'phone') // Sesuaikan nama kolom jika berbeda (misal: 'no_hp' atau 'phone')
                 .eq('id', childId)
                 .maybeSingle();
 
-            if (childRes != null && childRes['Phone'] != null) {
-              _childPhoneNumber = childRes['Phone'].toString();
+            if (childRes != null && childRes['phone'] != null) {
+              _childPhoneNumber = childRes['phone'].toString();
             }
           }
         } catch (e) {
@@ -686,7 +686,8 @@ class _KeywordsSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                  border: Border.all(
+                      color: AppColors.danger.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   keyword,
