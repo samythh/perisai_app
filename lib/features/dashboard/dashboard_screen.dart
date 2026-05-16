@@ -469,7 +469,9 @@ class _ChildAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return GestureDetector(
+      onTap: () => context.push('/child/${child.id}', extra: child),
+      child: Column(
       children: [
         Stack(
           children: [
@@ -543,6 +545,7 @@ class _ChildAvatar extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
       ],
+      ),
     );
   }
 }

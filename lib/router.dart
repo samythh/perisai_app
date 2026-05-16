@@ -15,6 +15,8 @@ import 'services/channel_service.dart';
 import 'features/pairing/onboarding_screen.dart';
 import 'features/settings/edit_profile_screen.dart';
 import 'features/dashboard/main_screen.dart';
+import 'features/dashboard/child_detail_screen.dart';
+import 'models/child.dart';
 
 final appRouter = GoRouter(
   navigatorKey: ChannelService.navigatorKey,
@@ -62,6 +64,12 @@ final appRouter = GoRouter(
       path: '/detail/:id',
       builder: (context, state) => DetectionDetailScreen(
         detectionId: state.pathParameters['id'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/child/:id',
+      builder: (context, state) => ChildDetailScreen(
+        child: state.extra as Child,
       ),
     ),
     GoRoute(
