@@ -8,6 +8,36 @@ class ChannelService {
     'com.perisai.app/detection_stream',
   );
 
+  static const MethodChannel _methodChannel = MethodChannel(
+    'com.perisai.app/service_control',
+  );
+
+  static Future<void> sendTestEvent() async {
+    try {
+      await _methodChannel.invokeMethod('sendTestEvent');
+    } catch (e) {
+      debugPrint('PERISAI: Error sendTestEvent → $e');
+    }
+  }
+
+  static Future<void> startService(String childId) async {
+    try {
+      await _methodChannel.invokeMethod('startService', {
+        'child_id': childId,
+      });
+    } catch (e) {
+      debugPrint('PERISAI: Error startService → $e');
+    }
+  }
+
+  static Future<void> stopService() async {
+    try {
+      await _methodChannel.invokeMethod('stopService');
+    } catch (e) {
+      debugPrint('PERISAI: Error stopService → $e');
+    }
+  }
+
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 

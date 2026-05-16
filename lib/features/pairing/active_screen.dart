@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
+import '../../services/channel_service.dart';
 
 class ActiveScreen extends StatefulWidget {
   const ActiveScreen({super.key});
@@ -88,6 +89,7 @@ class _ActiveScreenState extends State<ActiveScreen>
     );
 
     if (confirm == true) {
+      await ChannelService.stopService();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('child_id');
       await prefs.remove('role');
@@ -229,6 +231,7 @@ class _ActiveScreenState extends State<ActiveScreen>
                 const SizedBox(height: 16),
 
                 // Tombol putus koneksi — kecil di bawah
+// Tombol putus koneksi — kecil di bawah
                 TextButton(
                   onPressed: _disconnect,
                   child: Text(
@@ -236,6 +239,25 @@ class _ActiveScreenState extends State<ActiveScreen>
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.5),
                       fontSize: 13,
+                    ),
+                  ),
+                ),
+
+// Tombol test — HAPUS sebelum presentasi
+                TextButton.icon(
+                  onPressed: () async {
+                    await ChannelService.sendTestEvent();
+                  },
+                  icon: const Icon(
+                    Icons.bug_report_outlined,
+                    color: Colors.white38,
+                    size: 16,
+                  ),
+                  label: const Text(
+                    'Test Layar Edukasi',
+                    style: TextStyle(
+                      color: Colors.white38,
+                      fontSize: 12,
                     ),
                   ),
                 ),

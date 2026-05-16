@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
+import '../../services/channel_service.dart';
 
 class ScanQrScreen extends StatefulWidget {
   const ScanQrScreen({super.key});
@@ -65,6 +66,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('child_id', childId);
     await prefs.setString('role', 'child');
+    await ChannelService.startService(childId);
 
     if (!mounted) return;
 
