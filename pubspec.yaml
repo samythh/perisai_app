@@ -33,6 +33,10 @@ dependencies:
   # Storage lokal
   shared_preferences: ^2.2.0
 
+  image_picker: ^1.0.7
+
+  flutter_image_compress: ^2.1.0
+
   # Permission
   permission_handler: ^11.3.0
 
@@ -57,3 +61,6 @@ flutter:
     - assets/images/text_maskot.png
     - assets/images/orangtua.png
     - assets/images/anak.png
+    - assets/images/Onboarding1.png
+    - assets/images/Onboarding2.png
+    - assets/images/Onboarding3.png

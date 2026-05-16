@@ -203,7 +203,7 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Stack(
+                  child: const Stack(
                     children: [
                       // Sudut kiri atas
                       _Corner(top: 0, left: 0),

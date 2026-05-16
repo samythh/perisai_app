@@ -12,11 +12,18 @@ import 'features/pairing/active_screen.dart';
 import 'features/education/education_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'services/channel_service.dart';
+import 'features/pairing/onboarding_screen.dart';
+import 'features/settings/edit_profile_screen.dart';
+import 'features/dashboard/main_screen.dart';
 
 final appRouter = GoRouter(
   navigatorKey: ChannelService.navigatorKey,
   initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/onboarding',
+      builder: (context, state) => const OnboardingScreen(),
+    ),
     GoRoute(
       path: '/splash',
       builder: (context, state) => const SplashScreen(),
@@ -25,8 +32,16 @@ final appRouter = GoRouter(
       path: '/role-select',
       builder: (context, state) => const RoleSelectScreen(),
     ),
+    GoRoute(
+      path: '/main',
+      builder: (context, state) => const MainScreen(),
+    ),
 
     // Orang Tua
+    GoRoute(
+      path: '/edit-profile',
+      builder: (context, state) => const EditProfileScreen(),
+    ),
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),

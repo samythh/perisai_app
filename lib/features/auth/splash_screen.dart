@@ -66,7 +66,7 @@ class _SplashScreenState extends State<SplashScreen>
     final childId = prefs.getString('child_id');
 
     if (session != null && role == 'parent') {
-      context.go('/dashboard');
+      context.go('/main');
     } else if (role == 'child' && childId != null) {
       context.go('/active');
     } else {

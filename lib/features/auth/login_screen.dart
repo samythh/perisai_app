@@ -44,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('role', 'parent');
 
       if (!mounted) return;
-      context.go('/dashboard');
+      context.go('/main');
     } catch (e) {
       if (!mounted) return;
 

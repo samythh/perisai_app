@@ -20,9 +20,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   String _userName = '';
 
-  // Variabel untuk menyimpan soket koneksi Realtime
   late final RealtimeChannel _realtimeChannel;
-
   final FlutterLocalNotificationsPlugin _localNotif =
       FlutterLocalNotificationsPlugin();
 
@@ -30,17 +28,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _initLocalNotif();
-
-    // PERBAIKAN ARSITEKTUR 1: Sinkronisasi Balapan Waktu (Race Condition)
-    // Tunggu _loadData() selesai mengunduh data anak, BARU nyalakan soket Realtime
-    _loadData().then((_) {
-      _subscribeRealtime();
-    });
+    _loadData().then((_) => _subscribeRealtime());
   }
 
   @override
   void dispose() {
-    // PENGAMANAN MEMORI: Matikan soket saat halaman ditutup agar RAM HP tidak bocor
     Supabase.instance.client.removeChannel(_realtimeChannel);
     super.dispose();
   }
@@ -51,11 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _localNotif.initialize(settings);
   }
 
-  // PERBAIKAN ARSITEKTUR 2: Menggunakan PostgresChanges bukan Stream global
   void _subscribeRealtime() {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
     _realtimeChannel = Supabase.instance.client
         .channel('public:detections')
         .onPostgresChanges(
@@ -64,19 +52,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           table: 'detections',
           callback: (payload) {
             final newData = payload.newRecord;
-
             if (newData.isEmpty) return;
-
-            // 1. Ambil kumpulan ID Anak yang sah milik orang tua ini
             final childIds = _children.map((c) => c.id).toList();
-            if (childIds.isEmpty) return;
-
-            // 2. Jika baris deteksi yang baru masuk adalah milik anak kita
             if (childIds.contains(newData['child_id'])) {
-              // Tampilkan Notifikasi Darurat
               _showLocalNotif(newData);
-
-              // Muat ulang daftar list di UI agar Realtime
               _loadData();
             }
           },
@@ -86,28 +65,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _showLocalNotif(Map<String, dynamic> data) async {
     try {
-      // Handle confidence yang bisa String atau double
-      final rawConfidence = data['confidence'];
-      final confidence = rawConfidence is String
-          ? double.tryParse(rawConfidence) ?? 0.0
-          : (rawConfidence as num?)?.toDouble() ?? 0.0;
-
-      final confidencePercent = (confidence * 100).toStringAsFixed(0);
-      final triggeredBy = data['triggered_by'] ?? '';
-
-      // Label triggered_by yang friendly
-      final triggeredByLabel = switch (triggeredBy) {
+      final raw = data['confidence'];
+      final confidence = raw is String
+          ? double.tryParse(raw) ?? 0.0
+          : (raw as num?)?.toDouble() ?? 0.0;
+      final pct = (confidence * 100).toStringAsFixed(0);
+      final by = data['triggered_by'] ?? '';
+      final label = switch (by) {
         'ocr' => 'Baca Teks',
         'mobilenet' => 'Lihat Gambar',
         'trustpositif' => 'Cek URL',
         'combined' => 'Kombinasi',
-        _ => triggeredBy,
+        _ => by,
       };
-
       await _localNotif.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000, // ID unik per notif
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
         '⚠️ Konten judol terdeteksi!',
-        'AI $confidencePercent% yakin — terdeteksi via $triggeredByLabel',
+        'AI $pct% yakin — terdeteksi via $label',
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'perisai_channel',
@@ -122,44 +96,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       );
     } catch (e) {
-      debugPrint('PERISAI: Error show notif → $e');
+      debugPrint('PERISAI: notif error → $e');
     }
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
-      // Ambil nama user
       setState(() {
         _userName = user.userMetadata?['full_name'] ?? 'Orang Tua';
       });
 
-      // Ambil list anak
       final childrenRes = await Supabase.instance.client
           .from('children')
           .select()
           .eq('parent_id', user.id);
 
-      _children =
-          (childrenRes as List).map((json) => Child.fromJson(json)).toList();
+      _children = (childrenRes as List).map((j) => Child.fromJson(j)).toList();
 
-      // Ambil deteksi dari semua anak
       if (_children.isNotEmpty) {
-        final childIds = _children.map((c) => c.id).toList();
-
-        final detectionsRes = await Supabase.instance.client
+        final ids = _children.map((c) => c.id).toList();
+        final detRes = await Supabase.instance.client
             .from('detections')
             .select()
-            .inFilter('child_id', childIds)
+            .inFilter('child_id', ids)
             .order('created_at', ascending: false);
 
-        _detections = (detectionsRes as List)
-            .map((json) => Detection.fromJson(json))
-            .toList();
+        _detections =
+            (detRes as List).map((j) => Detection.fromJson(j)).toList();
       }
 
       setState(() => _isLoading = false);
@@ -168,7 +135,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Hitung deteksi hari ini
   int get _todayCount {
     final now = DateTime.now();
     return _detections
@@ -179,10 +145,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .length;
   }
 
-  // Hitung deteksi minggu ini
-  int get _weekCount {
-    final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-    return _detections.where((d) => d.createdAt.isAfter(weekAgo)).length;
+  int get _securityScore {
+    if (_detections.isEmpty) return 100;
+    final score = 100 - (_detections.length * 5);
+    return score.clamp(0, 100);
   }
 
   Future<void> _logout() async {
@@ -194,17 +160,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        title: Text('Hei, $_userName! 👋'),
+        backgroundColor: const Color(0xFFF7F8FA),
+        elevation: 0,
         automaticallyImplyLeading: false,
+        title: const Text(
+          'Dashboard',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => _showLogoutDialog(context),
+            icon: const Icon(Icons.settings_outlined,
+                color: AppColors.textPrimary),
+            onPressed: () => context.push('/settings'),
           ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push('/settings'),
+            icon:
+                const Icon(Icons.logout_rounded, color: AppColors.textPrimary),
+            onPressed: _showLogoutDialog,
           ),
         ],
       ),
@@ -218,42 +196,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Status card
-                    _StatusCard(isActive: true),
-                    const SizedBox(height: 16),
-
-                    // Stats row
-                    _StatsRow(
-                      todayCount: _todayCount,
-                      weekCount: _weekCount,
-                      safeCount: _children.length,
+                    // ─── 3 Summary Cards ───────────────
+                    _SummaryCards(
+                      totalDetected: _detections.length,
+                      todayDetected: _todayCount,
+                      securityScore: _securityScore,
                     ),
                     const SizedBox(height: 24),
 
-                    // Header list
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Riwayat Deteksi',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          '${_detections.length} total',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                    // ─── List Anak Horizontal ───────────
+                    if (_children.isNotEmpty) ...[
+                      _ChildrenRow(children: _children),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // ─── Riwayat Aktivitas ──────────────
+                    const Text(
+                      'Riwayat Aktivitas',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 12),
 
-                    // List deteksi atau empty state
                     _detections.isEmpty
                         ? _EmptyState()
                         : ListView.separated(
@@ -263,14 +230,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: 12),
                             itemBuilder: (context, index) {
-                              final detection = _detections[index];
-                              return _DetectionCard(
-                                detection: detection,
-                                onTap: () =>
-                                    context.push('/detail/${detection.id}'),
+                              final d = _detections[index];
+                              final child = _children.firstWhere(
+                                (c) => c.id == d.childId,
+                                orElse: () => Child(
+                                  id: '',
+                                  parentId: '',
+                                  childName: 'Anak',
+                                  age: 0,
+                                  createdAt: DateTime.now(),
+                                ),
+                              );
+                              return _ActivityCard(
+                                detection: d,
+                                child: child,
+                                onTap: () => context.push('/detail/${d.id}'),
                               );
                             },
                           ),
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
@@ -283,48 +261,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
           'Tambah Anak',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
     );
   }
 
-  void _showLogoutDialog(BuildContext context) {
+  void _showLogoutDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'Mau keluar nih? 👋',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Mau keluar nih? 👋',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         content: const Text(
-          'Kamu bakal keluar dari akun PERISAI. '
-          'Data anak tetap aman kok!',
+          'Kamu bakal keluar dari akun PERISAI.\nData anak tetap aman kok!',
           style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
-          // Tombol batal
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+            child: const Text('Batal',
+                style: TextStyle(color: AppColors.textSecondary)),
           ),
-
-          // Tombol logout
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+                  borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () async {
               Navigator.pop(ctx);
@@ -338,113 +302,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// ─── Widget Status Card ───────────────────────────────
-class _StatusCard extends StatelessWidget {
-  final bool isActive;
-  const _StatusCard({required this.isActive});
+// ─── 3 Summary Cards ──────────────────────────────────
+class _SummaryCards extends StatelessWidget {
+  final int totalDetected;
+  final int todayDetected;
+  final int securityScore;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isActive
-              ? [AppColors.primary, AppColors.primaryLight]
-              : [AppColors.danger, AppColors.danger],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isActive ? Icons.shield_rounded : Icons.shield_outlined,
-              color: Colors.white,
-              size: 32,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isActive ? AppStrings.active : AppStrings.inactive,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isActive
-                      ? 'PERISAI lagi jaga si kecil 🛡️'
-                      : 'HP anak tidak terlindungi ⚠️',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Widget Stats Row ─────────────────────────────────
-class _StatsRow extends StatelessWidget {
-  final int todayCount;
-  final int weekCount;
-  final int safeCount;
-
-  const _StatsRow({
-    required this.todayCount,
-    required this.weekCount,
-    required this.safeCount,
+  const _SummaryCards({
+    required this.totalDetected,
+    required this.todayDetected,
+    required this.securityScore,
   });
+
+  Color get _scoreColor {
+    if (securityScore >= 80) return AppColors.success;
+    if (securityScore >= 50) return AppColors.warning;
+    return AppColors.danger;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        // Total Terdeteksi
         Expanded(
-          child: _StatCard(
-            label: AppStrings.todayDetection,
-            value: '$todayCount',
-            color: AppColors.danger,
+          child: _SummaryCard(
+            icon: Icons.warning_rounded,
+            iconColor: AppColors.danger,
+            label: 'Total\nTerdeteksi',
+            value: '$totalDetected',
+            valueColor: AppColors.danger,
+          ),
+        ),
+        const SizedBox(width: 12),
+
+        // Screen Time (hari ini)
+        Expanded(
+          child: _SummaryCard(
             icon: Icons.today_rounded,
+            iconColor: AppColors.warning,
+            label: 'Deteksi\nHari Ini',
+            value: '$todayDetected',
+            valueColor: AppColors.warning,
           ),
         ),
         const SizedBox(width: 12),
+
+        // Skor Keamanan
         Expanded(
-          child: _StatCard(
-            label: AppStrings.weekDetection,
-            value: '$weekCount',
-            color: AppColors.warning,
-            icon: Icons.calendar_month_outlined,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(
-            label: 'Anak Terhubung',
-            value: '$safeCount',
-            color: AppColors.success,
-            icon: Icons.people_outline_rounded,
+          child: _SummaryCard(
+            icon: Icons.shield_rounded,
+            iconColor: _scoreColor,
+            label: 'Skor\nKeamanan',
+            value: '$securityScore',
+            valueColor: _scoreColor,
+            suffix: '%',
           ),
         ),
       ],
@@ -452,39 +364,72 @@ class _StatsRow extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
+class _SummaryCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
   final String label;
   final String value;
-  final Color color;
-  final IconData icon;
+  final Color valueColor;
+  final String suffix;
 
-  const _StatCard({
+  const _SummaryCard({
+    required this.icon,
+    required this.iconColor,
     required this.label,
     required this.value,
-    required this.color,
-    required this.icon,
+    required this.valueColor,
+    this.suffix = '',
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: color,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(height: 10),
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: valueColor,
+                  ),
+                ),
+                if (suffix.isNotEmpty)
+                  TextSpan(
+                    text: suffix,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: valueColor,
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 2),
@@ -493,6 +438,7 @@ class _StatCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 11,
               color: AppColors.textSecondary,
+              height: 1.3,
             ),
           ),
         ],
@@ -501,29 +447,154 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ─── Widget Detection Card ────────────────────────────
-class _DetectionCard extends StatelessWidget {
+// ─── Children Row (horizontal scroll) ────────────────
+class _ChildrenRow extends StatelessWidget {
+  final List<Child> children;
+  const _ChildrenRow({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Anak Terhubung',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 90,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: children.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              final child = children[index];
+              return _ChildAvatar(child: child);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChildAvatar extends StatelessWidget {
+  final Child child;
+  const _ChildAvatar({required this.child});
+
+  // Nama pertama saja
+  String get _firstName => child.childName.split(' ').first;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Stack(
+          children: [
+            // Avatar
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.12),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.3),
+                  width: 2,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  _firstName[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+
+            // Dot hijau online di kiri atas
+            Positioned(
+              top: 2,
+              left: 2,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        // Nama pertama
+        Text(
+          _firstName,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Activity Card ────────────────────────────────────
+class _ActivityCard extends StatelessWidget {
   final Detection detection;
+  final Child child;
   final VoidCallback onTap;
 
-  const _DetectionCard({
+  const _ActivityCard({
     required this.detection,
+    required this.child,
     required this.onTap,
   });
 
-  Color get _badgeColor {
+  String get _firstName => child.childName.split(' ').first;
+
+  String get _title {
     switch (detection.triggeredBy) {
       case 'ocr':
-        return AppColors.ocr;
+        return 'Teks Judol Terdeteksi';
       case 'mobilenet':
-        return AppColors.mobilenet;
+        return 'Visual Judol Terdeteksi';
       case 'trustpositif':
-        return AppColors.trustpositif;
+        return 'URL Judol Terdeteksi';
       case 'combined':
-        return AppColors.combined;
+        return 'Judol Terdeteksi';
       default:
-        return AppColors.textSecondary;
+        return 'Konten Mencurigakan';
     }
+  }
+
+  String get _desc {
+    if (detection.keywords.isNotEmpty) {
+      return 'Kata mencurigakan: ${detection.keywords.join(', ')}';
+    }
+    return 'Terdeteksi via ${detection.triggeredByLabel} '
+        '— ${detection.confidencePercent} yakin';
+  }
+
+  String _timeAgo(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
+    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
+    return '${diff.inDays} hari lalu';
   }
 
   @override
@@ -533,7 +604,7 @@ class _DetectionCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
           boxShadow: [
@@ -545,111 +616,125 @@ class _DetectionCard extends StatelessWidget {
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon bahaya
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.danger.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.warning_rounded,
-                color: AppColors.danger,
-                size: 24,
-              ),
+            // Avatar anak
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      child.childName.isNotEmpty
+                          ? child.childName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Danger triangle di kanan atas avatar
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: AppColors.danger,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.warning_rounded,
+                      color: Colors.white,
+                      size: 10,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(width: 12),
 
-            // Info deteksi
+            // Konten
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Badge triggered_by
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _badgeColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      detection.triggeredByLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _badgeColor,
-                        fontWeight: FontWeight.w600,
+                  // Title + waktu
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _timeAgo(detection.createdAt),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-
-                  // Keywords
-                  if (detection.keywords.isNotEmpty)
-                    Text(
-                      detection.keywords.join(', '),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
                   const SizedBox(height: 4),
 
-                  // Waktu
+                  // Nama anak
                   Text(
-                    _timeAgo(detection.createdAt),
+                    _firstName,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  // Deskripsi
+                  Text(
+                    _desc,
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
+                      height: 1.4,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
 
-            // Confidence
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  detection.confidencePercent,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.danger,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textSecondary,
-                  size: 20,
-                ),
-              ],
+            // Arrow
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textSecondary,
+              size: 20,
             ),
           ],
         ),
       ),
     );
   }
-
-  String _timeAgo(DateTime time) {
-    final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
-    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
-    return '${diff.inDays} hari lalu';
-  }
 }
 
-// ─── Widget Empty State ───────────────────────────────
+// ─── Empty State ──────────────────────────────────────
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

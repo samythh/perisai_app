@@ -49,7 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await prefs.setString('role', 'parent');
 
       if (!mounted) return;
-      context.go('/dashboard');
+      context.go('/main');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

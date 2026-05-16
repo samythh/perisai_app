@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../models/child.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,55 +26,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _loadData(); // ← reload setiap kali screen aktif kembali
+    _loadData();
   }
 
-  @override
-  void initState() {
-    super.initState();
-  }
+  String _avatarUrl = '';
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      context.go('/login');
+      return;
+    }
+
+    // Set data dari auth user dulu — tidak bergantung pada DB
+    setState(() {
+      _userName  = user.userMetadata?['full_name'] ?? '';
+      _userEmail = user.email ?? '';
+    });
+
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
-        context.go('/login');
-        return;
-      }
+      final parentData = await Supabase.instance.client
+          .from('parents')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
 
-      // Ambil nama & email dari auth
-      setState(() {
-        _userName = user.userMetadata?['full_name'] ?? 'Orang Tua';
-        _userEmail = user.email ?? '';
-      });
-
-      // Ambil list anak dari Supabase
       final response = await Supabase.instance.client
           .from('children')
           .select()
           .eq('parent_id', user.id)
           .order('created_at', ascending: false);
 
+      if (!mounted) return;
       setState(() {
-        _children =
+        _avatarUrl = parentData?['avatar_url'] ?? '';
+        _children  =
             (response as List).map((json) => Child.fromJson(json)).toList();
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Gagal load data, coba lagi?'),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      setState(() => _isLoading = false);
     }
   }
 
@@ -80,15 +77,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'Mau keluar nih? 👋',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
         content: const Text(
           'Kamu bakal keluar dari akun PERISAI.\nData anak tetap aman kok!',
@@ -97,17 +89,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+            child: const Text('Batal',
+                style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+                  borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Keluar'),
@@ -122,6 +111,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.remove('role');
       if (!mounted) return;
       context.go('/role-select');
+    }
+  }
+
+  Future<void> _confirmUnpair(Child child) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Putus HP ${child.childName}? 🤔',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        content: Text(
+          'HP ${child.childName} tidak akan terpantau lagi.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Putus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await Supabase.instance.client
+            .from('children')
+            .delete()
+            .eq('id', child.id);
+        await _loadData();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('HP ${child.childName} sudah diputus'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Gagal memutus koneksi, coba lagi?'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
+      }
     }
   }
 
@@ -142,51 +189,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Profile section
-                  _ProfileSection(
+                  // ─── Profile Card ───────────────────
+                  _ProfileCard(
                     userName: _userName,
                     userEmail: _userEmail,
+                    avatarUrl: _avatarUrl,
+                    onEditTap: () async {
+                      await context.push('/edit-profile');
+                      _loadData(); // refresh setelah edit
+                    },
                   ),
                   const SizedBox(height: 24),
 
-                  // Perangkat anak
-                  _SectionHeader(title: AppStrings.connectedDevices),
+                  // ─── Perangkat Anak ─────────────────
+                  const _SectionHeader(title: AppStrings.connectedDevices),
                   const SizedBox(height: 12),
                   _children.isEmpty
                       ? _EmptyChildren()
                       : Column(
-                          children: _children.map((child) {
-                            return _ChildTile(
-                              child: child,
-                              onUnpair: () => _confirmUnpair(child),
-                            );
-                          }).toList(),
+                          children: _children
+                              .map((child) => _ChildTile(
+                                    child: child,
+                                    onUnpair: () => _confirmUnpair(child),
+                                  ))
+                              .toList(),
                         ),
                   const SizedBox(height: 8),
 
-                  // Tombol tambah anak
                   OutlinedButton.icon(
                     onPressed: () => context.push('/add-child'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       side: const BorderSide(color: AppColors.primary),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(
-                      Icons.add_rounded,
-                      color: AppColors.primary,
-                    ),
-                    label: const Text(
-                      'Tambah Anak Baru',
-                      style: TextStyle(color: AppColors.primary),
-                    ),
+                    icon:
+                        const Icon(Icons.add_rounded, color: AppColors.primary),
+                    label: const Text('Tambah Anak Baru',
+                        style: TextStyle(color: AppColors.primary)),
                   ),
                   const SizedBox(height: 24),
 
-                  // Pengaturan notifikasi
-                  _SectionHeader(title: AppStrings.notification),
+                  // ─── Notifikasi ─────────────────────
+                  const _SectionHeader(title: AppStrings.notification),
                   const SizedBox(height: 12),
                   _SettingsTile(
                     icon: Icons.notifications_outlined,
@@ -203,23 +249,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Tentang
-                  _SectionHeader(title: 'Tentang'),
+                  // ─── Tentang ────────────────────────
+                  const _SectionHeader(title: 'Tentang'),
                   const SizedBox(height: 12),
-                  _SettingsTile(
+                  const _SettingsTile(
                     icon: Icons.shield_rounded,
                     title: 'PERISAI',
                     subtitle: 'Versi 1.0.0',
                   ),
                   const SizedBox(height: 4),
-                  _SettingsTile(
+                  const _SettingsTile(
                     icon: Icons.info_outline_rounded,
                     title: 'Dibuat dengan ❤️',
                     subtitle: 'Hackathon CORE3D 2026 — Unand',
                   ),
                   const SizedBox(height: 32),
 
-                  // Tombol logout
+                  // ─── Logout ─────────────────────────
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -228,16 +274,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.danger,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       icon: const Icon(Icons.logout_rounded),
                       label: const Text(
                         AppStrings.logout,
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+                            fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -247,155 +290,319 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
     );
   }
-
-  Future<void> _confirmUnpair(Child child) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Text(
-          'Putus HP ${child.childName}? 🤔',
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
-        content: Text(
-          'HP ${child.childName} tidak akan terpantau lagi. '
-          'Kamu bisa hubungkan lagi kapan saja.',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Putus'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        // Hapus dari Supabase
-        await Supabase.instance.client
-            .from('children')
-            .delete()
-            .eq('id', child.id);
-
-        // Reload data dari Supabase
-        await _loadData();
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('HP ${child.childName} sudah diputus'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      } catch (e) {
-        debugPrint('Delete error: $e');
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Gagal memutus koneksi, coba lagi?'),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
-    }
-  }
 }
 
-// ─── Profile Section ──────────────────────────────────
-class _ProfileSection extends StatelessWidget {
+// ─── Profile Card ─────────────────────────────────────
+class _ProfileCard extends StatefulWidget {
   final String userName;
   final String userEmail;
+  final String avatarUrl;
+  final VoidCallback onEditTap;
 
-  const _ProfileSection({
+  const _ProfileCard({
     required this.userName,
     required this.userEmail,
+    required this.avatarUrl,
+    required this.onEditTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+  State<_ProfileCard> createState() => _ProfileCardState();
+}
+
+class _ProfileCardState extends State<_ProfileCard> {
+  bool _isUploading = false;
+  String? _localAvatarUrl;
+
+  Future<void> _pickAndUploadPhoto() async {
+    // Pilih sumber foto
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                userName.isNotEmpty ? userName[0].toUpperCase() : '?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
+            const SizedBox(height: 20),
+            const Text(
+              'Pilih Foto Profil',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.camera_alt_rounded,
+                    color: AppColors.primary),
+              ),
+              title: const Text('Kamera'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.photo_library_rounded,
+                    color: AppColors.primary),
+              ),
+              title: const Text('Galeri'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
 
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  userName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+
+    if (picked == null) return;
+
+    setState(() => _isUploading = true);
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      final bytes = await picked.readAsBytes();
+      final compressedBytes = await _compressImage(bytes);
+      final filePath = '${user.id}/profile.jpg';
+
+      // Upload bytes langsung ke Supabase Storage
+      await Supabase.instance.client.storage.from('avatars').uploadBinary(
+            filePath,
+            compressedBytes,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'image/jpeg',
+            ),
+          );
+
+      // Ambil public URL
+      final url = Supabase.instance.client.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+      // Update tabel parents
+      await Supabase.instance.client
+          .from('parents')
+          .update({'avatar_url': url}).eq('id', user.id);
+
+      setState(() => _localAvatarUrl = url);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Foto profil berhasil diperbarui! ✅'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal upload foto: $e'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  Future<Uint8List> _compressImage(Uint8List bytes) async {
+    final result = await FlutterImageCompress.compressWithList(
+      bytes,
+      minWidth: 256,
+      minHeight: 256,
+      quality: 60,
+      format: CompressFormat.jpeg,
+    );
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayUrl = _localAvatarUrl ?? widget.avatarUrl;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Avatar + pencil
+          Stack(
+            children: [
+              // Foto atau inisial
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: _isUploading
+                    ? const Center(
+                        child: SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      )
+                    : displayUrl.isNotEmpty
+                        ? ClipOval(
+                            child: Image.network(
+                              displayUrl,
+                              width: 88,
+                              height: 88,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(
+                                  widget.userName.isNotEmpty
+                                      ? widget.userName[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: Text(
+                              widget.userName.isNotEmpty
+                                  ? widget.userName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 36,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+              ),
+
+              // Icon pencil di kiri bawah
+              Positioned(
+                bottom: 0,
+                left: 0,
+                child: GestureDetector(
+                  onTap: _isUploading ? null : _pickAndUploadPhoto,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  userEmail,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 13,
-                  ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Nama
+          Text(
+            widget.userName.isNotEmpty ? widget.userName : 'Nama belum diisi',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+
+          // Email
+          Text(
+            widget.userEmail,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+
+          // Tombol Edit Detail Akun
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: OutlinedButton(
+              onPressed: widget.onEditTap,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text(
+                'Edit Detail Akun',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -428,10 +635,7 @@ class _ChildTile extends StatelessWidget {
   final Child child;
   final VoidCallback onUnpair;
 
-  const _ChildTile({
-    required this.child,
-    required this.onUnpair,
-  });
+  const _ChildTile({required this.child, required this.onUnpair});
 
   @override
   Widget build(BuildContext context) {
@@ -445,7 +649,6 @@ class _ChildTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Avatar anak
           Container(
             width: 44,
             height: 44,
@@ -465,60 +668,38 @@ class _ChildTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-
-          // Info anak
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  child.childName,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                Text(child.childName,
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
                 const SizedBox(height: 2),
-                Text(
-                  '${child.age} tahun',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+                Text('${child.age} tahun',
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
               ],
             ),
           ),
-
-          // Status aktif
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.success.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
-              'Aktif',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.success,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: const Text('Aktif',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w600)),
           ),
           const SizedBox(width: 8),
-
-          // Tombol unpair
           IconButton(
-            icon: const Icon(
-              Icons.link_off_rounded,
-              color: AppColors.danger,
-              size: 20,
-            ),
+            icon: const Icon(Icons.link_off_rounded,
+                color: AppColors.danger, size: 20),
             onPressed: onUnpair,
           ),
         ],
@@ -559,22 +740,15 @@ class _SettingsTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
                 const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+                Text(subtitle,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
           ),
@@ -602,22 +776,14 @@ class _EmptyChildren extends StatelessWidget {
         children: [
           Text('👶', style: TextStyle(fontSize: 32)),
           SizedBox(height: 8),
-          Text(
-            'Belum ada anak terhubung',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
+          Text('Belum ada anak terhubung',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
           SizedBox(height: 4),
-          Text(
-            'Tambah anak dulu yuk!',
-            style: TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          Text('Tambah anak dulu yuk!',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
         ],
       ),
     );

@@ -25,7 +25,7 @@ class _RoleSelectScreenState extends State<RoleSelectScreen> {
     if (_selectedRole == 'parent') {
       context.push('/login');
     } else {
-      context.push('/scan-qr');
+      context.push('/onboarding');
     }
   }
 
