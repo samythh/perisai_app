@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_strings.dart';
@@ -76,71 +75,6 @@ class _ActiveScreenState extends State<ActiveScreen>
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  // Fungsi disconnect — hapus data lokal
-  Future<void> _disconnect() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'Putus koneksi?',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
-        content: const Text(
-          'Orang tua tidak bisa memantau HP kamu kalau koneksi diputus.',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Batal',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Putus Koneksi'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      // Update status di Supabase SEBELUM hapus child_id
-      if (_childId.isNotEmpty) {
-        try {
-          await Supabase.instance.client.rpc('update_child_connection', params: {
-            'p_child_id': _childId,
-            'p_status': 'offline_manual',
-            'p_last_seen': DateTime.now().toUtc().toIso8601String(),
-          });
-          debugPrint('PERISAI: Status diupdate ke offline_manual');
-        } catch (e) {
-          debugPrint('PERISAI: Gagal update status disconnect → $e');
-        }
-      }
-
-      await ChannelService.stopService();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('child_id');
-      await prefs.remove('role');
-      if (!mounted) return;
-      context.go('/role-select');
-    }
   }
 
   @override
@@ -262,18 +196,6 @@ class _ActiveScreenState extends State<ActiveScreen>
                   ),
 
                 const SizedBox(height: 16),
-
-                // Tombol putus koneksi
-                TextButton(
-                  onPressed: _disconnect,
-                  child: Text(
-                    'Putus Koneksi',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
 
                 // Tombol test — HAPUS sebelum presentasi
                 TextButton.icon(
