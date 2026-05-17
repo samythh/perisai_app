@@ -264,7 +264,7 @@ class _FormSection extends StatelessWidget {
         children: [
           const SizedBox(height: 8),
           const Text(
-            'Siapa si kecilnya? 👶',
+              'Masukkan Data Anak',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w800,

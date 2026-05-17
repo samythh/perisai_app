@@ -106,8 +106,7 @@ class PerisaiService : Service() {
 
         if (fromBoot && !hasMediaProjection) {
             Log.d(TAG, "boot path — heartbeat mode (tanpa screen capture)")
-            val prefs = getSharedPreferences("perisai_prefs", Context.MODE_PRIVATE)
-            val childId = prefs.getString("child_id", "") ?: ""
+            val childId = intent?.getStringExtra("child_id_boot") ?: ""
             if (childId.isNotBlank()) {
                 // Update status ke online dan mulai heartbeat
                 Thread {

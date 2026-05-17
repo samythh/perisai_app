@@ -82,9 +82,14 @@ class Child {
   String get greeting => 'Hei, ini HP-nya $childName 👋';
 
   /// Status efektif — kalau DB bilang online tapi heartbeat sudah
-  /// basi (>2 menit), anggap internet putus
+  /// basi (>2 menit) atau belum pernah ada, anggap tidak terhubung
   ConnectionStatus get effectiveStatus {
-    if (connectionStatus == ConnectionStatus.online && lastSeen != null) {
+    if (connectionStatus == ConnectionStatus.online) {
+      // Belum pernah kirim heartbeat — data lama/stale
+      if (lastSeen == null) {
+        return ConnectionStatus.offlineManual;
+      }
+      // Heartbeat basi > 2 menit — internet putus
       final staleness = DateTime.now().toUtc().difference(lastSeen!);
       if (staleness.inMinutes >= 2) {
         return ConnectionStatus.offlineInternet;

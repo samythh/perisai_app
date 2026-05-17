@@ -792,7 +792,7 @@ class _EmptyChildren extends StatelessWidget {
       ),
       child: const Column(
         children: [
-          Text('👶', style: TextStyle(fontSize: 32)),
+          Text('👦', style: TextStyle(fontSize: 32)),
           SizedBox(height: 8),
           Text('Belum ada anak terhubung',
               style: TextStyle(

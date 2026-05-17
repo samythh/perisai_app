@@ -170,17 +170,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   int get _todayCount {
     final now = DateTime.now();
-    return _detections
-        .where((d) =>
-            d.createdAt.year == now.year &&
-            d.createdAt.month == now.month &&
-            d.createdAt.day == now.day)
-        .length;
+    return _detections.where((d) {
+      final local = d.createdAt.toLocal();
+      return local.year == now.year &&
+          local.month == now.month &&
+          local.day == now.day;
+    }).length;
   }
 
   int get _securityScore {
     if (_detections.isEmpty) return 100;
-    return (100 - (_detections.length * 5)).clamp(0, 100);
+    return (100 - _detections.length * 10).clamp(0, 100);
   }
 
   Future<void> _logout() async {
@@ -470,9 +470,9 @@ class _ChildrenRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Anak Terhubung',
-          style: TextStyle(
+        Text(
+          'Anak Terhubung (${children.length})',
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,

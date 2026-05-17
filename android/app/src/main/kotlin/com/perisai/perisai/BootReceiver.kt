@@ -14,18 +14,23 @@ class BootReceiver : BroadcastReceiver() {
         Log.d(TAG, "onReceive action=${intent.action}")
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
 
-        val prefs = context.getSharedPreferences("perisai_prefs", Context.MODE_PRIVATE)
-        val childId = prefs.getString("child_id", "") ?: ""
+        // Baca dari Flutter SharedPreferences (bukan perisai_prefs)
+        val flutterPrefs = context.getSharedPreferences(
+            "FlutterSharedPreferences", Context.MODE_PRIVATE
+        )
+        val childId = flutterPrefs.getString("flutter.child_id", "") ?: ""
+        val role = flutterPrefs.getString("flutter.role", "") ?: ""
 
-        if (childId.isBlank()) {
-            Log.w(TAG, "boot: child_id blank — skip auto-start")
+        if (role != "child" || childId.isBlank()) {
+            Log.w(TAG, "boot: bukan mode anak atau child_id kosong — skip")
             return
         }
 
         try {
-            Log.d(TAG, "boot: starting PerisaiService (idle mode — no MediaProjection token)")
+            Log.d(TAG, "boot: starting PerisaiService (heartbeat mode)")
             val serviceIntent = Intent(context, PerisaiService::class.java).apply {
                 putExtra("from_boot", true)
+                putExtra("child_id_boot", childId)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)

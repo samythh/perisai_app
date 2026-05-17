@@ -146,8 +146,8 @@ class MainActivity : FlutterActivity() {
                     eventSink?.success(event.toString())
 
                     // Revert status koneksi ke offline_manual via Supabase RPC
-                    val prefs = getSharedPreferences("perisai_prefs", Context.MODE_PRIVATE)
-                    val childId = prefs.getString("child_id", "") ?: ""
+                    val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                    val childId = prefs.getString("flutter.child_id", "") ?: ""
                     if (childId.isNotBlank()) {
                         Thread {
                             try {

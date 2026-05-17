@@ -95,6 +95,9 @@ class ChannelService {
   static Future<void> _updateConnectionStatus(String status) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final role = prefs.getString('role') ?? '';
+      if (role != 'child') return; // Hanya HP anak yang boleh update
+
       final childId = prefs.getString('child_id');
       if (childId == null || childId.isEmpty) {
         debugPrint('PERISAI: Tidak bisa update status — child_id kosong');
@@ -169,8 +172,17 @@ class ChannelService {
   }
 
   // ─── Handler service_started ────────────────────────
-  static void _handleServiceStarted(Map<String, dynamic> data) {
+  static void _handleServiceStarted(Map<String, dynamic> data) async {
     debugPrint('PERISAI: Service mulai jalan');
+
+    final prefs = await SharedPreferences.getInstance();
+    final role = prefs.getString('role') ?? '';
+
+    // Hanya proses di HP anak
+    if (role != 'child') {
+      debugPrint('PERISAI: Bukan mode anak — skip update status');
+      return;
+    }
 
     // Update status ke Supabase → online
     _updateConnectionStatus('online');

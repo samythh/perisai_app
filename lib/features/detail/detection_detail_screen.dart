@@ -206,47 +206,8 @@ class _DetectionDetailScreenState extends State<DetectionDetailScreen> {
                       const SizedBox(height: 32),
 
                       // ==========================================
-                      // ACTION BUTTONS: AJARKAN & HUBUNGI ANAK
+                      // ACTION BUTTON: HUBUNGI ANAK
                       // ==========================================
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text('Oke, sudah ditandai! ✅'),
-                                backgroundColor: AppColors.success,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            );
-                            context.pop();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color(0xFF29B6F6), // Biru utama
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          icon: const Icon(Icons.school_rounded, size: 20),
-                          label: const Text(
-                            'AJARKAN',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
                         height: 52,
