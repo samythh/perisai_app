@@ -670,6 +670,93 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
     );
   }
 
+  Future<void> _togglePause() async {
+    final isOnline = _child.effectiveStatus == ConnectionStatus.online;
+    final newStatus = isOnline ? 'offline_manual' : 'online';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          isOnline ? 'Putus Sementara?' : 'Sambungkan Kembali?',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        ),
+        content: Text(
+          isOnline
+              ? 'Pemantauan HP ${_child.firstName} akan dijeda. PERISAI tidak akan mendeteksi konten judol sampai disambungkan kembali.'
+              : 'Aktifkan kembali pemantauan HP ${_child.firstName}?',
+          style: const TextStyle(
+              color: AppColors.textSecondary, fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isOnline ? AppColors.warning : AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isOnline ? 'Putus Sementara' : 'Sambungkan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await Supabase.instance.client.rpc('update_child_connection', params: {
+        'p_child_id': _child.id,
+        'p_status': newStatus,
+        'p_last_seen': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _child = _child.copyWith(
+          connectionStatus: isOnline
+              ? ConnectionStatus.offlineManual
+              : ConnectionStatus.online,
+          lastSeen: DateTime.now().toUtc(),
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isOnline
+              ? 'Pemantauan dijeda sementara ⏸️'
+              : 'Pemantauan diaktifkan kembali ✅'),
+          backgroundColor:
+              isOnline ? AppColors.warning : AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengubah status: $e'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
   Future<void> _loadDetections() async {
     try {
       final res = await Supabase.instance.client
@@ -980,7 +1067,10 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: _ConnectionStatusCard(child: child),
+                    child: _ConnectionStatusCard(
+                      child: child,
+                      onTogglePause: _togglePause,
+                    ),
                   ),
                 ),
 
@@ -1095,7 +1185,11 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
 // ─── Connection Status Card ───────────────────────────
 class _ConnectionStatusCard extends StatelessWidget {
   final Child child;
-  const _ConnectionStatusCard({required this.child});
+  final VoidCallback onTogglePause;
+  const _ConnectionStatusCard({
+    required this.child,
+    required this.onTogglePause,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1240,6 +1334,56 @@ class _ConnectionStatusCard extends StatelessWidget {
               ],
             ),
           ),
+
+          // ── Tombol toggle pause ──
+          if (child.effectiveStatus != ConnectionStatus.offlineInternet) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: child.effectiveStatus == ConnectionStatus.online
+                  ? OutlinedButton.icon(
+                      onPressed: onTogglePause,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.warning,
+                        side: BorderSide(
+                          color: AppColors.warning.withValues(alpha: 0.4),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.pause_circle_outline_rounded,
+                          size: 18),
+                      label: const Text(
+                        'Putus Sementara',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: onTogglePause,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.link_rounded, size: 18),
+                      label: const Text(
+                        'Sambungkan Kembali',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+            ),
+          ],
         ],
       ),
     );
