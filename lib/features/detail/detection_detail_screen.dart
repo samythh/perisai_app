@@ -555,14 +555,17 @@ class _InfoCard extends StatelessWidget {
   }
 
   String _formatDateTop(DateTime dt) {
+    final local = dt.toLocal();
     final now = DateTime.now();
     final timeStr =
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} WIB';
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')} WIB';
 
-    if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+    if (local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day) {
       return '$timeStr, Hari ini';
     }
-    return '$timeStr, ${dt.day}/${dt.month}/${dt.year}';
+    return '$timeStr, ${local.day}/${local.month}/${local.year}';
   }
 }
 
